@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Pro | Consolidated Workspace</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://ptyzpepyjhgmineyyjll.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_EEWYGUNSlMhzq3eMGx1jFw_gac9NJoC';
+        const db = window.supabase.createClient('https://ptyzpepyjhgmineyyjll.supabase.co', 'sb_publishable_EEWYGUNSlMhzq3eMGx1jFw_gac9NJoC');
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:var(--font-sans,system-ui);background:var(--color-background-tertiary,#f5f5f2);color:var(--color-text-primary,#1a1a1a);font-size:14px}
+        .app{display:flex;min-height:100vh}
+        .sidebar{width:220px;background:var(--color-background-primary,#fff);border-right:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.15));display:flex;flex-direction:column;flex-shrink:0}
+        .sidebar-logo{padding:18px 16px 14px;border-bottom:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.15))}
+        .sidebar-logo h2{font-size:13px;font-weight:600;color:#185FA5;letter-spacing:.04em;text-transform:uppercase}
+        .sidebar-logo p{font-size:11px;color:var(--color-text-tertiary,#999);margin-top:2px}
+        .nav-section{padding:8px 0}
+        .nav-label{font-size:10px;font-weight:500;color:var(--color-text-tertiary,#999);letter-spacing:.08em;text-transform:uppercase;padding:8px 16px 4px}
+        .nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;color:var(--color-text-secondary,#666);font-size:13px;border-left:2px solid transparent;transition:all .15s}
+        .nav-item:hover{background:var(--color-background-secondary,#f5f5f2);color:var(--color-text-primary,#1a1a1a)}
+        .nav-item.active{background:var(--color-background-secondary,#f5f5f2);color:#185FA5;border-left:2px solid #185FA5;font-weight:500}
+        .nav-item i{font-size:16px;width:18px}
+        .main{flex:1;overflow:auto}
+        .topbar{background:var(--color-background-primary,#fff);border-bottom:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.15));padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+        .topbar h1{font-size:16px;font-weight:500}
+        .content{padding:24px}
+        .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+        .metric-card{background:var(--color-background-primary,#fff);border-radius:12px;padding:16px;border:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.12));box-shadow: 0 1px 2px rgba(0,0,0,0.05)}
+        .metric-card .label{font-size:11px;color:var(--color-text-secondary,#666);margin-bottom:6px;font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+        .metric-card .value{font-size:24px;font-weight:600;color:var(--color-text-primary,#1a1a1a)}
+        .metric-card .sub{font-size:11px;color:#185FA5;margin-top:2px;font-weight:500}
+        .card{background:var(--color-background-primary,#fff);border-radius:12px;border:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.12));padding:20px;margin-bottom:16px}
+        .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+        .card-title{font-size:14px;font-weight:600;color:var(--color-text-primary,#1a1a1a)}
+        .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:0.5px solid var(--color-border-secondary,rgba(0,0,0,0.25));background:#fff;cursor:pointer;font-size:13px;color:var(--color-text-primary,#1a1a1a);font-family:inherit;font-weight:500;transition:all .15s}
+        .btn:hover{background:var(--color-background-secondary,#f5f5f2)}
+        .btn-primary{background:#185FA5;color:#fff;border-color:#185FA5}
+        .btn-primary:hover{background:#0C447C;border-color:#0C447C}
+        .btn-success{background:#1D9E75;color:#fff;border-color:#1D9E75}
+        .badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em}
+        .badge-blue{background:#E6F1FB;color:#0C447C}
+        .badge-green{background:#EAF3DE;color:#27500A}
+        .badge-amber{background:#FAEEDA;color:#633806}
+        table{width:100%;border-collapse:collapse}
+        th{text-align:left;padding:12px 10px;font-size:11px;font-weight:600;color:var(--color-text-secondary,#666);border-bottom:1px solid var(--color-border-tertiary,rgba(0,0,0,0.08));text-transform:uppercase;letter-spacing:0.05em}
+        td{padding:12px 10px;border-bottom:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.05))}
+        .form-section{padding:16px;background:var(--color-background-secondary,#f9f9f7);border-radius:12px;margin-bottom:20px;border:0.5px solid var(--color-border-tertiary,rgba(0,0,0,0.08))}
+        .form-section-title{font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+        .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+        .form-group{display:flex;flex-direction:column;gap:6px}
+        .form-group label{font-size:11px;font-weight:600;color:var(--color-text-secondary,#666)}
+        .form-group input, .form-group select{padding:10px 12px;border-radius:8px;border:1px solid var(--color-border-secondary,rgba(0,0,0,0.15));font-size:13px;outline:none}
+        .form-group input:focus{border-color:#185FA5;box-shadow: 0 0 0 3px rgba(24,95,165,0.1)}
+        .available-qty{color:#1D9E75;font-weight:600}
+        .zero-qty{color:#D85A30;font-weight:600}
+
+        /* Search toolbar for list views */
+        .list-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+        .search-box{position:relative;flex:1;min-width:180px;max-width:320px}
+        .search-box input{width:100%;padding:8px 12px 8px 34px;border-radius:8px;border:1px solid rgba(0,0,0,0.15);font-size:13px;outline:none;transition:border-color .15s}
+        .search-box input:focus{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,0.1)}
+        .search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#999;font-size:14px;pointer-events:none}
+        .filter-select{padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,0.15);font-size:13px;outline:none;background:#fff;color:#1a1a1a;cursor:pointer;min-width:150px}
+        .filter-select:focus{border-color:#185FA5}
+        .results-count{font-size:12px;color:#999;margin-left:auto;white-space:nowrap}
+        .clear-btn{padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,0.15);background:#fff;font-size:12px;cursor:pointer;color:#666;display:flex;align-items:center;gap:4px;white-space:nowrap}
+        .clear-btn:hover{background:#f5f5f2}
+        .highlight{background:#FFF3CD;border-radius:3px;padding:0 2px}
+
+        @media print {
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        const { useState, useMemo, useEffect, useRef } = React;
+        const e = React.createElement;
+        const toCamel = obj => Object.fromEntries(
+            Object.entries(obj).map(([k, v]) => [
+                k.replace(/_([a-z])/g, (_, c) => c.toUpperCase()), v
+            ])
+        );
+        const toSnake = obj => Object.fromEntries(
+            Object.entries(obj).map(([k, v]) => [
+                k.replace(/([A-Z])/g, '_$1').toLowerCase(), v
+            ])
+        );
+
+        // ─── Searchable Select (dropdown with inline search) ───────────────────
+        function SearchableSelect({ value, onChange, options, placeholder, disabled }) {
+            const [isOpen, setIsOpen] = useState(false);
+            const [search, setSearch] = useState('');
+            const ref = useRef(null);
+            const selectedOption = options.find(o => o.value === value);
+
+            useEffect(() => {
+                if (!isOpen) setSearch(selectedOption ? selectedOption.label : '');
+            }, [value, isOpen, selectedOption]);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (ref.current && !ref.current.contains(event.target)) setIsOpen(false);
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const filteredOptions = useMemo(() => {
+                if (!search || search === (selectedOption ? selectedOption.label : '')) return options;
+                return options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+            }, [options, search, selectedOption]);
+
+            return e('div', { ref, style: { position: 'relative', width: '100%' } },
+                e('div', { style: { display: 'flex', alignItems: 'center', position: 'relative' } },
+                    e('input', {
+                        value: search,
+                        placeholder: placeholder || 'Search and select...',
+                        disabled,
+                        onChange: (x) => { setSearch(x.target.value); setIsOpen(true); },
+                        onFocus: () => { setIsOpen(true); if (search === (selectedOption ? selectedOption.label : '')) setSearch(''); },
+                        style: { width:'100%', padding:'10px 32px 10px 12px', borderRadius:'8px', border:'1px solid rgba(0,0,0,0.15)', fontSize:'13px', outline:'none', background: disabled ? '#f5f5f2' : '#fff' }
+                    }),
+                    e('i', { className:'ti ti-selector', style:{ position:'absolute', right:'10px', pointerEvents:'none', color:'#999', fontSize:'14px' } })
+                ),
+                isOpen && !disabled && e('div', {
+                    style: { position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid rgba(0,0,0,0.15)', borderRadius:'8px', boxShadow:'0 4px 12px rgba(0,0,0,0.15)', maxHeight:'220px', overflowY:'auto', zIndex:1000, padding:'4px' }
+                },
+                    filteredOptions.length === 0
+                        ? e('div', { style:{ padding:'8px 12px', color:'#999', fontSize:'12px', fontStyle:'italic' } }, 'No options found')
+                        : filteredOptions.map(opt => e('div', {
+                            key: opt.value,
+                            onClick: () => { onChange(opt.value); setSearch(opt.label); setIsOpen(false); },
+                            style: { padding:'8px 12px', fontSize:'13px', borderRadius:'6px', cursor:'pointer', background: opt.value === value ? '#F0F7FF' : 'transparent', color: opt.value === value ? '#185FA5' : '#1a1a1a', fontWeight: opt.value === value ? 600 : 400 },
+                            onMouseEnter: (ev) => { ev.currentTarget.style.background = opt.value === value ? '#E0F0FF' : '#f5f5f2'; },
+                            onMouseLeave: (ev) => { ev.currentTarget.style.background = opt.value === value ? '#F0F7FF' : 'transparent'; }
+                        }, opt.label))
+                )
+            );
+        }
+
+        // ─── List Search Bar component ──────────────────────────────────────────
+        function ListSearchBar({ value, onChange, placeholder, onClear, count, total }) {
+            return e('div', { style:{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px', flexWrap:'wrap' } },
+                e('div', { className:'search-box' },
+                    e('i', { className:'ti ti-search' }),
+                    e('input', { value, onChange: x => onChange(x.target.value), placeholder: placeholder || 'Search...' })
+                ),
+                value && e('button', { className:'clear-btn', onClick: onClear },
+                    e('i', { className:'ti ti-x', style:{ fontSize:'12px' } }), 'Clear'
+                ),
+                e('span', { className:'results-count' }, 
+                    value ? `${count} of ${total} results` : `${total} record${total !== 1 ? 's' : ''}`
+                )
+            );
+        }
+
+        // ─── Number generators ──────────────────────────────────────────────────
+        const generateNextGRNNumber = (existingGrns) => {
+            if (!existingGrns || existingGrns.length === 0) return 'GRN-OCT-004';
+            const lastGrn = existingGrns[existingGrns.length - 1];
+            const lastNum = lastGrn.number;
+            const match = lastNum.match(/^(GRN-[A-Z]{3,4}-)(\d+)$/);
+            if (match) return match[1] + String(parseInt(match[2], 10) + 1).padStart(match[2].length, '0');
+            const fb = lastNum.match(/(\d+)(?!.*\d)/);
+            if (fb) return lastNum.substring(0, fb.index) + String(parseInt(fb[1], 10) + 1).padStart(fb[1].length, '0') + lastNum.substring(fb.index + fb[1].length);
+            return 'GRN-OCT-004';
+        };
+
+        const generateNextGDNNumber = (existingGdns) => {
+            if (!existingGdns || existingGdns.length === 0) return 'GDN-NOV-502';
+            const lastGdn = existingGdns[existingGdns.length - 1];
+            const lastNum = lastGdn.number;
+            const match = lastNum.match(/^(GDN-[A-Z]{3,4}-)(\d+)$/);
+            if (match) return match[1] + String(parseInt(match[2], 10) + 1).padStart(match[2].length, '0');
+            const fb = lastNum.match(/(\d+)(?!.*\d)/);
+            if (fb) return lastNum.substring(0, fb.index) + String(parseInt(fb[1], 10) + 1).padStart(fb[1].length, '0') + lastNum.substring(fb.index + fb[1].length);
+            return 'GDN-NOV-502';
+        };
+
+        function buildBackupWorkbook(lpos, projects, calcStock, grns, grnItems, gdns, gdnItems) {
+        const stockRows = [];
+        lpos.forEach(l => {
+            const prj = projects.find(p => p.id === l.projectId);
+            calcStock(l.id).forEach(s => stockRows.push({
+                'Project Name': prj?.name || 'N/A', 'Project Number': prj?.number || 'N/A',
+                'LPO Number': l.number, 'Product Code': s.productCode, 'OEM Code': s.oemCode,
+                'Description': s.description, 'Unit': s.unit, 'Received Quantity': s.received,
+                'Delivered Quantity': s.delivered, 'Available Quantity': s.available
+            }));
+        });
+
+        const grnRows = grnItems.map(it => {
+            const grn = grns.find(g => g.id === it.grnId);
+            const lpo = lpos.find(l => l.id === grn?.lpoId);
+            const prj = projects.find(p => p.id === lpo?.projectId);
+            return { 'GRN Number': grn?.number || 'N/A', 'Date': grn?.date || 'N/A', 'Project Number': prj?.number || 'N/A', 'LPO Number': lpo?.number || 'N/A', 'Product Code': it.productCode, 'OEM Code': it.oemCode, 'Description': it.description, 'Unit': it.unit, 'Qty': it.qty, 'Unit Price': it.unitPrice, 'Total Price': it.totalPrice };
+        });
+
+        const gdnRows = gdnItems.map(it => {
+            const gdn = gdns.find(g => g.id === it.gdnId);
+            const lpo = lpos.find(l => l.id === gdn?.lpoId);
+            const prj = projects.find(p => p.id === lpo?.projectId);
+            return { 'GDN Number': gdn?.number || 'N/A', 'Date': gdn?.date || 'N/A', 'Project Number': prj?.number || 'N/A', 'LPO Number': lpo?.number || 'N/A', 'Product Code': it.productCode, 'OEM Code': it.oemCode, 'Description': it.description, 'Unit': it.unit, 'Qty Delivered': it.qtyDelivered };
+        });
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stockRows), 'Stock Balance');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(grnRows), 'GRN Transactions');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gdnRows), 'GDN Transactions');
+        return wb;
+    }
+
+        // ─── App ────────────────────────────────────────────────────────────────
+        function App() {
+            const [page, setPage] = useState('dashboard');
+            const [projects, setProjects] = useState([]);
+            const [lpos, setLpos] = useState([]);
+            const [grns, setGrns] = useState([]);
+            const [grnItems, setGrnItems] = useState([]);
+            const [gdns, setGdns] = useState([]);
+            const [gdnItems, setGdnItems] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [session, setSession] = useState(null);
+            const [authChecked, setAuthChecked] = useState(false);
+            const [loginEmail, setLoginEmail] = useState('');
+            const [loginPassword, setLoginPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+
+            const [emailModal, setEmailModal] = useState({ isOpen:false, recipient:'', subject:'', body:'', fileName:'', attachmentType:'' });
+            useEffect(() => {
+                db.auth.getSession().then(({ data }) => {
+                    setSession(data.session);
+                    setAuthChecked(true);
+                });
+                const { data: listener } = db.auth.onAuthStateChange((_event, sess) => {
+                    setSession(sess);
+                });
+                return () => listener.subscription.unsubscribe();
+            }, []);
+
+            const handleLogin = async () => {
+            setLoginError('');
+
+            const { error } = await db.auth.signInWithPassword({
+                email: loginEmail,
+                password: loginPassword
+            });
+
+            if (error) {
+                setLoginError(error.message);
+            }
+        };
+
+        const handleLogout = async () => {
+            await db.auth.signOut();
+        };
+
+        useEffect(() => {
+
+            if (!session) return;
+
+            async function loadAll() {
+                setLoading(true);
+
+                const [p, l, g, gi, d, di] = await Promise.all([
+                    db.from('projects').select('*').order('created_at'),
+                    db.from('lpos').select('*').order('created_at'),
+                    db.from('grns')
+                        .select('*')
+                        .is('deleted_at', null)
+                        .order('created_at'),
+                    db.from('grn_items').select('*'),
+                    db.from('gdns')
+                        .select('*')
+                        .is('deleted_at', null)
+                        .order('created_at'),
+                    db.from('gdn_items').select('*'),
+                ]);
+
+                setProjects((p.data || []).map(toCamel));
+                setLpos((l.data || []).map(toCamel));
+                setGrns((g.data || []).map(toCamel));
+                setGrnItems((gi.data || []).map(toCamel));
+                setGdns((d.data || []).map(toCamel));
+                setGdnItems((di.data || []).map(toCamel));
+
+                setLoading(false);
+
+                // ADD AUTO-BACKUP CODE HERE
+                const today = new Date();
+                const isLastDay =
+                    new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() === today.getDate();
+
+                if (isLastDay) {
+                    const month = today.toISOString().slice(0, 7);
+
+                    const { data: existing } = await db
+                        .from('backups')
+                        .select('id')
+                        .eq('month', month)
+                        .limit(1);
+
+                    if (!existing || existing.length === 0) {
+
+                        const projectsData = (p.data || []).map(toCamel);
+                        const lposData = (l.data || []).map(toCamel);
+                        const grnsData = (g.data || []).map(toCamel);
+                        const grnItemsData = (gi.data || []).map(toCamel);
+                        const gdnsData = (d.data || []).map(toCamel);
+                        const gdnItemsData = (di.data || []).map(toCamel);
+
+                        const tempCalcStock = (lpoId) => {
+                            const lpoGrnIds = grnsData
+                                .filter(g => g.lpoId === lpoId)
+                                .map(g => g.id);
+
+                            const lpoGdnIds = gdnsData
+                                .filter(d => d.lpoId === lpoId)
+                                .map(d => d.id);
+
+                            const stock = {};
+
+                            grnItemsData
+                                .filter(i => lpoGrnIds.includes(i.grnId))
+                                .forEach(i => {
+                                    if (!stock[i.productCode]) {
+                                        stock[i.productCode] = {
+                                            ...i,
+                                            received:0,
+                                            delivered:0
+                                        };
+                                    }
+
+                                    stock[i.productCode].received += i.qty;
+                                });
+
+                            gdnItemsData
+                                .filter(i => lpoGdnIds.includes(i.gdnId))
+                                .forEach(i => {
+                                    if (stock[i.productCode]) {
+                                        stock[i.productCode].delivered += i.qtyDelivered;
+                                    }
+                                });
+
+                            return Object.values(stock).map(s => ({
+                                ...s,
+                                available:s.received - s.delivered
+                            }));
+                        };
+
+                        const wb = buildBackupWorkbook(
+                            lposData,
+                            projectsData,
+                            tempCalcStock,
+                            grnsData,
+                            grnItemsData,
+                            gdnsData,
+                            gdnItemsData
+                        );
+
+                        XLSX.writeFile(wb, `backup_${month}_auto.xlsx`);
+
+                        await db.from('backups').insert({ month });
+                    }
+                }
+            }
+
+            loadAll();
+
+        }, [session]);
+            const triggerEmailModal = (subject, body, fileName, attachmentType) => {
+                setEmailModal({ isOpen:true, recipient:'', subject, body, fileName, attachmentType });
+            };
+
+            const calcStock = (lpoId) => {
+                const lpoGrnIds = grns.filter(g => g.lpoId === lpoId).map(g => g.id);
+                const lpoGdnIds = gdns.filter(d => d.lpoId === lpoId).map(d => d.id);
+                const stock = {};
+                grnItems.filter(i => lpoGrnIds.includes(i.grnId)).forEach(i => {
+                    if (!stock[i.productCode]) stock[i.productCode] = { ...i, received:0, delivered:0 };
+                    stock[i.productCode].received += i.qty;
+                });
+                gdnItems.filter(i => lpoGdnIds.includes(i.gdnId)).forEach(i => {
+                    if (stock[i.productCode]) stock[i.productCode].delivered += i.qtyDelivered;
+                });
+                return Object.values(stock).map(s => ({ ...s, available: s.received - s.delivered }));
+            };
+
+            const PageComp = useMemo(() => {
+                const PAGES = { dashboard:Dashboard, grn:GRNPage, gdn:GDNPage, stock:StockInquiry, reports:Reports, backup:BackupPage };
+                return PAGES[page];
+            }, [page]);
+
+            const TITLES = { dashboard:'Dashboard Overview', grn:'Goods Receipt Note (GRN)', gdn:'Goods Delivery Note (GDN)', stock:'Stock Inquiry & Balance', reports:'Enterprise Reporting Hub', backup:'Monthly Backup' };
+            
+            if (!authChecked) {
+                    return e(
+                        'div',
+                        {
+                            style: {
+                                display:'flex',
+                                alignItems:'center',
+                                justifyContent:'center',
+                                height:'100vh',
+                                color:'#666'
+                            }
+                        },
+                        'Checking session...'
+                    );
+            }
+            if (!session) {
+
+                return e(
+                    'div',
+                    {
+                        style: {
+                            display:'flex',
+                            alignItems:'center',
+                            justifyContent:'center',
+                            height:'100vh',
+                            background:'#f5f5f2'
+                        }
+                    },
+
+                    e(
+                        'div',
+                        {
+                            style: {
+                                background:'#fff',
+                                padding:'32px',
+                                borderRadius:'12px',
+                                width:'320px',
+                                border:'0.5px solid rgba(0,0,0,0.12)',
+                                boxShadow:'0 4px 20px rgba(0,0,0,0.08)'
+                            }
+                        },
+
+                        e(
+                            'h2',
+                            {
+                                style: {
+                                    fontSize:'16px',
+                                    fontWeight:600,
+                                    marginBottom:'4px',
+                                    color:'#185FA5'
+                                }
+                            },
+                            'InventoryPro'
+                        ),
+
+                        e(
+                            'p',
+                            {
+                                style: {
+                                    fontSize:'12px',
+                                    color:'#999',
+                                    marginBottom:'20px'
+                                }
+                            },
+                            'Sign in to continue'
+                        ),
+
+                        e(
+                            'div',
+                            {
+                                style: {
+                                    display:'flex',
+                                    flexDirection:'column',
+                                    gap:'12px'
+                                }
+                            },
+
+                            e(
+                                'div',
+                                { className:'form-group' },
+
+                                e('label', null, 'Email'),
+
+                                e('input', {
+                                    type:'email',
+                                    value:loginEmail,
+                                    onChange:x=>setLoginEmail(x.target.value),
+                                    onKeyDown:x=>{
+                                        if(x.key==='Enter') handleLogin();
+                                    }
+                                })
+                            ),
+
+                            e(
+                                'div',
+                                { className:'form-group' },
+
+                                e('label', null, 'Password'),
+
+                                e('input', {
+                                    type:'password',
+                                    value:loginPassword,
+                                    onChange:x=>setLoginPassword(x.target.value),
+                                    onKeyDown:x=>{
+                                        if(x.key==='Enter') handleLogin();
+                                    }
+                                })
+                            ),
+
+                            loginError &&
+                                e(
+                                    'div',
+                                    {
+                                        style:{
+                                            color:'#D85A30',
+                                            fontSize:'12px'
+                                        }
+                                    },
+                                    loginError
+                                ),
+
+                            e(
+                                'button',
+                                {
+                                    className:'btn btn-primary',
+                                    style:{
+                                        marginTop:'6px',
+                                        justifyContent:'center'
+                                    },
+                                    onClick:handleLogin
+                                },
+                                'Sign In'
+                            )
+                        )
+                    )
+                );
+            }
+            if (loading) return e('div', { style: { display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', color:'#666', fontSize:'14px' } }, 'Loading...');
+            return e('div', { className:'app' },
+                e('div', { className:'sidebar no-print' },
+                    e('div', { className:'sidebar-logo' }, e('h2', null, 'InventoryPro'), e('p', null, 'Consolidated Workspace')),
+                    e('div', { className:'nav-section' },
+                        e('div', { className:'nav-label' }, 'Overview'),
+                        e('div', { className:'nav-item'+(page==='dashboard'?' active':''), onClick:()=>setPage('dashboard') }, e('i',{className:'ti ti-layout-dashboard'}), 'Dashboard'),
+                        e('div', { className:'nav-label' }, 'Operations'),
+                        e('div', { className:'nav-item'+(page==='grn'?' active':''), onClick:()=>setPage('grn') }, e('i',{className:'ti ti-package'}), 'Goods Receipt (GRN)'),
+                        e('div', { className:'nav-item'+(page==='gdn'?' active':''), onClick:()=>setPage('gdn') }, e('i',{className:'ti ti-truck-delivery'}), 'Goods Delivery (GDN)'),
+                        e('div', { className:'nav-item'+(page==='stock'?' active':''), onClick:()=>setPage('stock') }, e('i',{className:'ti ti-barcode'}), 'Stock Inquiry'),
+                        e('div', { className:'nav-label' }, 'Analysis'),
+                        e('div', { className:'nav-item'+(page==='reports'?' active':''), onClick:()=>setPage('reports') }, e('i',{className:'ti ti-report-analytics'}), 'Reports')
+                    ),e('div', {
+                        className:'nav-item'+(page==='backup'?' active':''),
+                        onClick:()=>setPage('backup')
+                    },
+                        e('i',{className:'ti ti-archive'}),
+                        'Backup'
+                    ),
+
+                    e(
+                        'div',
+                        {
+                            style: {
+                                marginTop:'auto',
+                                padding:'16px',
+                                borderTop:'0.5px solid rgba(0,0,0,0.1)'
+                            }
+                        },
+
+                        e(
+                            'button',
+                            {
+                                className:'btn',
+                                style:{
+                                    width:'100%',
+                                    justifyContent:'center'
+                                },
+                                onClick:handleLogout
+                            },
+
+                            e('i',{className:'ti ti-logout'}),
+                            'Sign Out'
+                        )
+                    )
+
+                ),
+                e('div', { className:'main' },
+                    e('div', { className:'topbar no-print' },
+                        e('h1', null, TITLES[page] || page.toUpperCase()),
+                        e('div', { className:'badge badge-green' }, 'Live System')
+                    ),
+                    e('div', { className:'content' },
+                        e(PageComp, { projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, gdns, setGdns, gdnItems, setGdnItems, calcStock, triggerEmailModal, session })
+                    )
+                ),
+                emailModal.isOpen && e('div', {
+                    style:{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }
+                },
+                    e('div', { style:{ background:'#fff', padding:'24px', borderRadius:'12px', width:'450px', border:'0.5px solid rgba(0,0,0,0.15)', boxShadow:'0 4px 20px rgba(0,0,0,0.15)', fontFamily:'system-ui,sans-serif' } },
+                        e('h3', { style:{ marginBottom:'14px', fontSize:'16px', fontWeight:600 } }, 'Send Document via Email'),
+                        e('div', { style:{ display:'flex', flexDirection:'column', gap:'12px' } },
+                            e('div', { className:'form-group' }, e('label',null,'Recipient Email'), e('input',{ value:emailModal.recipient, placeholder:'e.g. manager@company.com', onChange:x=>setEmailModal({...emailModal,recipient:x.target.value}) })),
+                            e('div', { className:'form-group' }, e('label',null,'Subject'), e('input',{ value:emailModal.subject, onChange:x=>setEmailModal({...emailModal,subject:x.target.value}) })),
+                            e('div', { className:'form-group' }, e('label',null,'Message Summary'),
+                                e('textarea', { value:emailModal.body, rows:5, style:{ padding:'10px', borderRadius:'8px', border:'1px solid rgba(0,0,0,0.15)', resize:'none', fontSize:'13px', fontFamily:'inherit', outline:'none' }, onChange:x=>setEmailModal({...emailModal,body:x.target.value}) })
+                            ),
+                            e('div', { style:{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', background:'#F0F7FF', borderRadius:'8px', fontSize:'12px' } },
+                                e('i', { className:'ti ti-file-'+(emailModal.attachmentType==='pdf'?'pdf':'spreadsheet'), style:{ fontSize:'24px', color:emailModal.attachmentType==='pdf'?'#D85A30':'#1D9E75' } }),
+                                e('div', null,
+                                    e('div', { style:{ fontWeight:600 } }, emailModal.fileName),
+                                    e('div', { style:{ color:'#666' } }, emailModal.attachmentType==='pdf'?'PDF Copy (Auto-generated)':'Excel Spreadsheet (Ready to Export)')
+                                )
+                            )
+                        ),
+                        e('div', { style:{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:'20px' } },
+                            e('button', { className:'btn', onClick:()=>setEmailModal({...emailModal,isOpen:false}) }, 'Cancel'),
+                            e('button', { className:'btn btn-primary', onClick:()=>{
+                                if(!emailModal.recipient) return alert('Please enter recipient email');
+                                window.location.href = `mailto:${emailModal.recipient}?subject=${encodeURIComponent(emailModal.subject)}&body=${encodeURIComponent(emailModal.body+'\n\n[Please attach the downloaded '+emailModal.fileName+' before sending]')}`;
+                                setEmailModal({...emailModal,isOpen:false});
+                                setTimeout(()=>alert(`Notice: Your email client has been triggered. Please ensure you attach the downloaded copy of "${emailModal.fileName}" from your downloads folder before sending.`),500);
+                            }}, 'Open Mail Client')
+                        )
+                    )
+                )
+            );
+        }
+
+        // ─── Dashboard ──────────────────────────────────────────────────────────
+        function Dashboard({ projects, lpos, grns, gdns, grnItems }) {
+            const totalVal = grnItems.reduce((s,i)=>s+i.totalPrice, 0);
+            return e('div', null,
+                e('div', { className:'metric-grid' },
+                    e('div',{className:'metric-card'}, e('div',{className:'label'},'Projects'), e('div',{className:'value'},projects.length), e('div',{className:'sub'},'Total Registered')),
+                    e('div',{className:'metric-card'}, e('div',{className:'label'},'LPOs'), e('div',{className:'value'},lpos.length), e('div',{className:'sub'},'LPO Count')),
+                    e('div',{className:'metric-card'}, e('div',{className:'label'},'Goods Receipts (GRN)'), e('div',{className:'value'},grns.length), e('div',{className:'sub'},'Receipts Registered')),
+                    e('div',{className:'metric-card'}, e('div',{className:'label'},'Goods Deliveries (GDN)'), e('div',{className:'value'},gdns.length), e('div',{className:'sub'},'Dispatches Registered')),
+                    e('div',{className:'metric-card'}, e('div',{className:'label'},'Total Inventory Value'), e('div',{className:'value'},'$'+totalVal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})), e('div',{className:'sub'},'Valuation'))
+                ),
+                e('div',{className:'card'},
+                    e('div',{className:'card-header'}, e('span',{className:'card-title'},'Recent System Log')),
+                    e('table',null,
+                        e('thead',null,e('tr',null,e('th',null,'Type'),e('th',null,'Reference Number'),e('th',null,'Date'),e('th',null,'Status'))),
+                        e('tbody',null, grns.map(g=>e('tr',{key:g.id},
+                            e('td',null,e('span',{className:'badge badge-blue'},'GRN')),
+                            e('td',null,g.number), e('td',null,g.date), e('td',null,'Finalized')
+                        )))
+                    )
+                )
+            );
+        }
+
+        // ─── GRN Page ───────────────────────────────────────────────────────────
+        function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal }) {
+            const [view, setView] = useState('list');
+            const [selectedGrn, setSelectedGrn] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [form, setForm] = useState({
+                pNumber:'', pName:'', pLocation:'',
+                lNumber:'', lSupplier:'', lAddress:'',
+                gNumber:'', gDate:new Date().toISOString().split('T')[0], gRemarks:'',
+                items:[{ productCode:'', oemCode:'', description:'', unit:'Pcs', qty:'', unitPrice:'' }]
+            });
+
+            // Build enriched GRN rows for searching
+            const enrichedGrns = useMemo(() => grns.map(g => {
+                const lpo = lpos.find(l => l.id === g.lpoId);
+                const prj = projects.find(p => p.id === lpo?.projectId);
+                const items = grnItems.filter(i => i.grnId === g.id);
+                const total = items.reduce((s,i)=>s+i.totalPrice, 0);
+                return { ...g, lpo, prj, total };
+            }), [grns, lpos, projects, grnItems]);
+
+            const filteredGrns = useMemo(() => {
+                if (!searchQuery.trim()) return enrichedGrns;
+                const q = searchQuery.toLowerCase();
+                return enrichedGrns.filter(g =>
+                    g.number.toLowerCase().includes(q) ||
+                    g.date.includes(q) ||
+                    (g.prj?.number || '').toLowerCase().includes(q) ||
+                    (g.prj?.name || '').toLowerCase().includes(q) ||
+                    (g.lpo?.supplier || '').toLowerCase().includes(q) ||
+                    (g.lpo?.number || '').toLowerCase().includes(q) ||
+                    (g.remarks || '').toLowerCase().includes(q)
+                );
+            }, [enrichedGrns, searchQuery]);
+
+            const handleStartCreate = () => {
+                const nextGrnNumber = generateNextGRNNumber(grns);
+                setForm({ pNumber:'', pName:'', pLocation:'', lNumber:'', lSupplier:'', lAddress:'', gNumber:nextGrnNumber, gDate:new Date().toISOString().split('T')[0], gRemarks:'', items:[{ productCode:'', oemCode:'', description:'', unit:'Pcs', qty:'', unitPrice:'' }] });
+                setView('create');
+            };
+
+            const handleSendGrn = (grn) => {
+                const lpo = lpos.find(l=>l.id===grn.lpoId);
+                const prj = projects.find(p=>p.id===lpo?.projectId);
+                const items = grnItems.filter(i=>i.grnId===grn.id);
+                const total = items.reduce((s,i)=>s+i.totalPrice, 0);
+                triggerEmailModal(
+                    `[InventoryPro] Goods Receipt Note - ${grn.number}`,
+                    `Hi Recipient,\n\nPlease find details for Goods Receipt Note ${grn.number}:\n- Date: ${grn.date}\n- Project Name: ${prj?.name||'N/A'}\n- Project Number: ${prj?.number||'N/A'}\n- Supplier Name: ${lpo?.supplier||'N/A'}\n- Total Value: $${total.toLocaleString(undefined,{minimumFractionDigits:2})}\n- Remarks: ${grn.remarks||'None'}\n\nPlease check the attached PDF copy for itemized details.`,
+                    `${grn.number.toLowerCase()}_receipt.pdf`, 'pdf'
+                );
+            };
+
+            const handleProjectNumberChange = (val) => {
+                const matchedPrj = projects.find(p=>p.number.toUpperCase()===val.toUpperCase());
+                setForm(prev => matchedPrj ? { ...prev, pNumber:val, pName:matchedPrj.name, pLocation:matchedPrj.location||'' } : { ...prev, pNumber:val });
+            };
+
+            const handleLpoNumberChange = (val) => {
+                const matchedPrj = projects.find(p=>p.number.toUpperCase()===form.pNumber.toUpperCase());
+                const matchedLpo = lpos.find(l=>l.number.toUpperCase()===val.toUpperCase() && (!matchedPrj||l.projectId===matchedPrj.id));
+                setForm(prev => matchedLpo ? { ...prev, lNumber:val, lSupplier:matchedLpo.supplier, lAddress:matchedLpo.address||'' } : { ...prev, lNumber:val });
+            };
+
+            return e('div', null,
+                e('div', { className:'card' },
+                    e('div', { className:'card-header' },
+                        e('span', { className:'card-title' }, 'Goods Receipt Module'),
+                        view === 'list' && e('button', { className:'btn btn-primary no-print', onClick:handleStartCreate }, e('i',{className:'ti ti-plus'}), 'Record New Receipt')
+                    ),
+
+                    // ── LIST VIEW ──
+                    view === 'list' ? e('div', null,
+                        e(ListSearchBar, {
+                            value: searchQuery,
+                            onChange: setSearchQuery,
+                            placeholder: 'Search by GRN no., date, project no., supplier...',
+                            onClear: () => setSearchQuery(''),
+                            count: filteredGrns.length,
+                            total: enrichedGrns.length
+                        }),
+                        e('table', null,
+                            e('thead', null, e('tr', null,
+                                e('th', null, 'GRN Number'),
+                                e('th', null, 'Date'),
+                                e('th', null, 'Project Number'),
+                                e('th', null, 'Supplier Name'),
+                                e('th', { style:{ textAlign:'right' } }, 'Total Price'),
+                                e('th', { style:{ textAlign:'right', paddingRight:'20px' } }, 'Action')
+                            )),
+                            e('tbody', null,
+                                filteredGrns.length === 0
+                                    ? e('tr', null, e('td', { colSpan:6, style:{ textAlign:'center', color:'#999', padding:'32px' } },
+                                        searchQuery ? `No receipts match "${searchQuery}"` : 'No receipts found.'
+                                      ))
+                                    : filteredGrns.map(g => e('tr', { key:g.id, style:{ cursor:'pointer' }, onClick:()=>{ setSelectedGrn(grns.find(x=>x.id===g.id)); setView('detail'); } },
+                                        e('td', null, e('span', { className:'badge badge-blue' }, g.number)),
+                                        e('td', null, g.date),
+                                        e('td', null, g.prj?.number || 'N/A'),
+                                        e('td', null, g.lpo?.supplier || 'N/A'),
+                                        e('td', { style:{ textAlign:'right', fontWeight:600 } }, '$'+g.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})),
+                                        e('td', { style:{ textAlign:'right', paddingRight:'20px' } },
+                                            e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#185FA5' },
+                                                onClick:(ev)=>{ ev.stopPropagation(); setSelectedGrn(grns.find(x=>x.id===g.id)); setView('detail'); }
+                                            }, e('i', { className:'ti ti-eye', style:{ fontSize:'18px' } }))
+                                        )
+                                    ))
+                            )
+                        )
+                    )
+
+                    // ── CREATE VIEW ──
+                    : view === 'create' ? e('div', null,
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-building'}), '1. Project Details'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'Project Number'), e('input',{ value:form.pNumber, placeholder:'e.g. PRJ-AVI-01', onChange:x=>handleProjectNumberChange(x.target.value) })),
+                                e('div',{className:'form-group'}, e('label',null,'Project Name'), e('input',{ value:form.pName, placeholder:'e.g. Airport T3 Expansion', onChange:x=>setForm({...form,pName:x.target.value}) })),
+                                e('div',{className:'form-group', style:{gridColumn:'span 2'}}, e('label',null,'Project Location'), e('input',{ value:form.pLocation, placeholder:'e.g. Dubai, UAE', onChange:x=>setForm({...form,pLocation:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-file-invoice'}), '2. LPO Details'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'LPO Number'), e('input',{ value:form.lNumber, placeholder:'e.g. LPO-CAM-700', onChange:x=>handleLpoNumberChange(x.target.value) })),
+                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e('input',{ value:form.lSupplier, placeholder:'e.g. TechVision Global', onChange:x=>setForm({...form,lSupplier:x.target.value}) })),
+                                e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Supplier Address'), e('input',{ value:form.lAddress, placeholder:'e.g. Silicon Oasis, Dubai', onChange:x=>setForm({...form,lAddress:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-package'}), '3. Goods Receipt Header'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'GRN Number'), e('input',{ value:form.gNumber, readOnly:true, style:{ background:'#f0f0f0', color:'#666', fontWeight:600 } })),
+                                e('div',{className:'form-group'}, e('label',null,'Receipt Date'), e('input',{ type:'date', value:form.gDate, onChange:x=>setForm({...form,gDate:x.target.value}) })),
+                                e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Remarks'), e('input',{ value:form.gRemarks, placeholder:'Remarks about this receipt', onChange:x=>setForm({...form,gRemarks:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-list'}), '4. Product Items'),
+                            e('table', null,
+                                e('thead', null, e('tr', null,
+                                    e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
+                                    e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Quantity'),
+                                    e('th',{style:{textAlign:'right'}},'Unit Price'), e('th',{style:{textAlign:'right'}},'Total Price'), e('th',null,'')
+                                )),
+                                e('tbody', null, form.items.map((it,idx)=>{
+                                    const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
+                                    return e('tr',{key:idx},
+                                        e('td',null,e('input',{placeholder:'Code',value:it.productCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].productCode=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e('input',{placeholder:'OEM Code',value:it.oemCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].oemCode=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e('input',{placeholder:'Description',value:it.description,style:{width:140},onChange:x=>{const n=[...form.items];n[idx].description=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e('input',{placeholder:'Pcs',value:it.unit,style:{width:50},onChange:x=>{const n=[...form.items];n[idx].unit=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e('input',{type:'number',placeholder:'0',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...form.items];n[idx].qty=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e('input',{type:'number',placeholder:'0.00',value:it.unitPrice,style:{width:70,textAlign:'right'},onChange:x=>{const n=[...form.items];n[idx].unitPrice=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',{style:{verticalAlign:'middle',fontWeight:600,minWidth:80,textAlign:'right'}},'$'+(qty*price).toFixed(2)),
+                                        e('td',null,e('button',{className:'btn',style:{color:'#D85A30',padding:'4px 8px'},onClick:()=>setForm({...form,items:form.items.filter((_,i)=>i!==idx)})},e('i',{className:'ti ti-trash'})))
+                                    );
+                                }))
+                            ),
+                            e('button',{className:'btn no-print',style:{marginTop:12},onClick:()=>setForm({...form,items:[...form.items,{productCode:'',oemCode:'',description:'',unit:'Pcs',qty:'',unitPrice:''}]})},'+ Add Line')
+                        ),
+                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
+                            e('button',{className:'btn',onClick:()=>setView('list')},'Discard'),
+                            e('button',{className:'btn btn-primary',onClick: async () => {
+                                        if (!form.pNumber || !form.lNumber || !form.gNumber) return alert('Fill required fields');
+
+                                        // 1. Project — upsert
+                                        let prj = projects.find(p => p.number.toUpperCase() === form.pNumber.toUpperCase());
+                                        if (!prj) {
+                                            const { data, error } = await db.from('projects')
+                                                .insert({ number: form.pNumber, name: form.pName, location: form.pLocation, created_by: session.user.id })
+                                                .select().single();
+                                            if (error) return alert('Error saving project: ' + error.message);
+                                            prj = toCamel(data);
+                                        } else {
+                                            await db.from('projects').update({ name: form.pName, location: form.pLocation }).eq('id', prj.id);
+                                            prj = { ...prj, name: form.pName, location: form.pLocation };
+                                        }
+
+                                        // 2. LPO — upsert
+                                        let lpo = lpos.find(l => l.number.toUpperCase() === form.lNumber.toUpperCase() && l.projectId === prj.id);
+                                        if (!lpo) {
+                                            const { data, error } = await db.from('lpos')
+                                                .insert({ project_id: prj.id, number: form.lNumber, supplier: form.lSupplier, address: form.lAddress, created_by: session.user.id })
+                                                .select().single();
+                                            if (error) return alert('Error saving LPO: ' + error.message);
+                                            lpo = toCamel(data);
+                                        } else {
+                                            await db.from('lpos').update({ supplier: form.lSupplier, address: form.lAddress }).eq('id', lpo.id);
+                                            lpo = { ...lpo, supplier: form.lSupplier, address: form.lAddress };
+                                        }
+
+                                        // 3. GRN
+                                        const { data: grnData, error: grnError } = await db.from('grns')
+                                            .insert({ lpo_id: lpo.id, number: form.gNumber, date: form.gDate, remarks: form.gRemarks, created_by: session.user.id })
+                                            .select().single();
+                                        if (grnError) return alert('Error saving GRN: ' + grnError.message);
+                                        const newGrn = toCamel(grnData);
+
+                                        // 4. GRN items
+                                        const validItems = form.items.filter(it => it.productCode && it.qty);
+                                        if (validItems.length === 0) return alert('Add at least one product item');
+                                        const itemsToInsert = validItems.map(it => ({
+                                            grn_id: newGrn.id,
+                                            product_code: it.productCode,
+                                            oem_code: it.oemCode,
+                                            description: it.description,
+                                            unit: it.unit || 'Pcs',
+                                            qty: parseFloat(it.qty),
+                                            unit_price: parseFloat(it.unitPrice) || 0,
+                                            total_price: (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
+                                            created_by: session.user.id
+                                        }));
+                                        const { data: itemsData, error: itemsError } = await db.from('grn_items').insert(itemsToInsert).select();
+                                        if (itemsError) return alert('Error saving items: ' + itemsError.message);
+
+                                        // 5. Update local state (no reload needed)
+                                        setProjects(prev => prev.find(p => p.id === prj.id) ? prev.map(p => p.id === prj.id ? prj : p) : [...prev, prj]);
+                                        setLpos(prev => prev.find(l => l.id === lpo.id) ? prev.map(l => l.id === lpo.id ? lpo : l) : [...prev, lpo]);
+                                        setGrns(prev => [...prev, newGrn]);
+                                        setGrnItems(prev => [...prev, ...itemsData.map(toCamel)]);
+                                        setView('list');
+                                    }},'Confirm Entry')
+                        )
+                    )
+
+                    // ── DETAIL VIEW ──
+                    : view === 'detail' && selectedGrn ? e('div', { className:'print-area' },
+                        e('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',borderBottom:'1px solid rgba(0,0,0,0.1)',paddingBottom:'16px'}},
+                            e('div',null,
+                                e('h3',{style:{fontSize:'18px',fontWeight:600}},'Goods Receipt Note Details'),
+                                e('p',{style:{fontSize:'13px',color:'#666',marginTop:'4px'}},'Complete record of the received goods')
+                            ),
+                            e('div',{style:{display:'flex',gap:'8px'},className:'no-print'},
+                                e('button',{className:'btn btn-primary',onClick:()=>handleSendGrn(selectedGrn)}, e('i',{className:'ti ti-send',style:{marginRight:'6px'}}),'Send to Recipient'),
+                                e('button',{className:'btn',onClick:()=>window.print()}, e('i',{className:'ti ti-printer',style:{marginRight:'6px'}}),'Print Receipt'),
+                                e('button',{className:'btn',onClick:()=>{setView('list');setSelectedGrn(null);}}, e('i',{className:'ti ti-arrow-left',style:{marginRight:'6px'}}),'Back to List')
+                            )
+                        ),
+                        e('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'24px'}},
+                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-building'}),'Project & Header Information'),
+                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                    ...[['Project Number:',(()=>{const l=lpos.find(x=>x.id===selectedGrn.lpoId);return projects.find(p=>p.id===l?.projectId)?.number||'N/A';})()],
+                                        ['Project Name:',(()=>{const l=lpos.find(x=>x.id===selectedGrn.lpoId);return projects.find(p=>p.id===l?.projectId)?.name||'N/A';})()],
+                                        ['Location:',(()=>{const l=lpos.find(x=>x.id===selectedGrn.lpoId);return projects.find(p=>p.id===l?.projectId)?.location||'N/A';})()],
+                                        ['GRN Number:',selectedGrn.number],
+                                        ['Receipt Date:',selectedGrn.date],
+                                        ['Remarks:',selectedGrn.remarks||'No remarks provided']
+                                    ].flatMap(([label,val],i)=>[
+                                        e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},label),
+                                        e('span',{key:'v'+i,style:label==='GRN Number:'?{fontWeight:600,color:'#185FA5'}:{}},val)
+                                    ])
+                                )
+                            ),
+                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-file-invoice'}),'LPO & Supplier Information'),
+                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                    ...[['LPO Number:',lpos.find(l=>l.id===selectedGrn.lpoId)?.number||'N/A'],
+                                        ['Supplier Name:',lpos.find(l=>l.id===selectedGrn.lpoId)?.supplier||'N/A'],
+                                        ['Supplier Address:',lpos.find(l=>l.id===selectedGrn.lpoId)?.address||'N/A']
+                                    ].flatMap(([label,val],i)=>[
+                                        e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},label),
+                                        e('span',{key:'v'+i,style:label==='LPO Number:'?{fontWeight:600,color:'#185FA5'}:{}},val)
+                                    ])
+                                )
+                            )
+                        ),
+                        e('div',{className:'form-section',style:{background:'#fff',margin:0}},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}),'Received Products List'),
+                            e('table',null,
+                                e('thead',null,e('tr',null,
+                                    e('th',{style:{width:'40px'}},'#'), e('th',null,'Product Code'), e('th',null,'OEM Code'),
+                                    e('th',null,'Description'), e('th',null,'Unit'),
+                                    e('th',{style:{textAlign:'right'}},'Quantity'), e('th',{style:{textAlign:'right'}},'Unit Price'), e('th',{style:{textAlign:'right'}},'Total Price')
+                                )),
+                                e('tbody',null,(()=>{
+                                    const items=grnItems.filter(i=>i.grnId===selectedGrn.id);
+                                    const grandTotal=items.reduce((s,it)=>s+it.totalPrice,0);
+                                    return[
+                                        ...items.map((it,idx)=>e('tr',{key:it.id||idx},
+                                            e('td',null,idx+1),
+                                            e('td',null,e('span',{className:'badge badge-blue'},it.productCode)),
+                                            e('td',null,it.oemCode||'N/A'), e('td',null,it.description), e('td',null,it.unit),
+                                            e('td',{style:{textAlign:'right'}},it.qty),
+                                            e('td',{style:{textAlign:'right'}},'$'+it.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})),
+                                            e('td',{style:{textAlign:'right',fontWeight:600}},'$'+it.totalPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}))
+                                        )),
+                                        e('tr',{key:'total',style:{background:'#f9f9f7'}},
+                                            e('td',{colSpan:5,style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},'Grand Total:'),
+                                            e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},items.reduce((s,it)=>s+it.qty,0)),
+                                            e('td',null),
+                                            e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px',color:'#185FA5',fontSize:'15px'}},'$'+grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}))
+                                        )
+                                    ];
+                                })())
+                            )
+                        ),
+                        e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'20px'},className:'no-print'},
+                            e('button',{className:'btn btn-primary',onClick:()=>{setView('list');setSelectedGrn(null);}},'Close Details')
+                        )
+                    ) : null
+                )
+            );
+        }
+
+        // ─── GDN Page ───────────────────────────────────────────────────────────
+        function GDNPage({ projects, lpos, grns, gdns, setGdns, grnItems, gdnItems, setGdnItems, calcStock, triggerEmailModal }) {
+            const [view, setView] = useState('list');
+            const [selectedGdn, setSelectedGdn] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [selProject, setSelProject] = useState('');
+            const [selLpo, setSelLpo] = useState('');
+            const [deliveries, setDeliveries] = useState({});
+            const [form, setForm] = useState({ number:'', date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
+
+            const enrichedGdns = useMemo(() => gdns.map(d => {
+                const lpo = lpos.find(l=>l.id===d.lpoId);
+                const prj = projects.find(p=>p.id===lpo?.projectId);
+                return { ...d, lpo, prj };
+            }), [gdns, lpos, projects]);
+
+            const filteredGdns = useMemo(() => {
+                if (!searchQuery.trim()) return enrichedGdns;
+                const q = searchQuery.toLowerCase();
+                return enrichedGdns.filter(d =>
+                    d.number.toLowerCase().includes(q) ||
+                    d.date.includes(q) ||
+                    (d.prj?.number||'').toLowerCase().includes(q) ||
+                    (d.prj?.name||'').toLowerCase().includes(q) ||
+                    (d.lpo?.number||'').toLowerCase().includes(q) ||
+                    (d.lpo?.supplier||'').toLowerCase().includes(q) ||
+                    (d.consigneeName||'').toLowerCase().includes(q) ||
+                    (d.consigneeAddress||'').toLowerCase().includes(q)
+                );
+            }, [enrichedGdns, searchQuery]);
+
+            const availLpos = selProject ? lpos.filter(l=>l.projectId===selProject) : [];
+
+            const getProjectStock = (projectId) => {
+                const projectLpos = lpos.filter(l=>l.projectId===projectId);
+                const projectLpoIds = projectLpos.map(l=>l.id);
+                const projectGrnIds = grns.filter(g=>projectLpoIds.includes(g.lpoId)).map(g=>g.id);
+                const projectGdnIds = gdns.filter(d=>projectLpoIds.includes(d.lpoId)).map(d=>d.id);
+                const pStock = {};
+                grnItems.filter(i=>projectGrnIds.includes(i.grnId)).forEach(i=>{
+                    if(!pStock[i.productCode]) pStock[i.productCode]={productCode:i.productCode,oemCode:i.oemCode,description:i.description,unit:i.unit,received:0,delivered:0};
+                    pStock[i.productCode].received+=i.qty;
+                });
+                gdnItems.filter(i=>projectGdnIds.includes(i.gdnId)).forEach(i=>{
+                    if(pStock[i.productCode]) pStock[i.productCode].delivered+=i.qtyDelivered;
+                });
+                return Object.values(pStock).map(s=>({...s,available:s.received-s.delivered}));
+            };
+
+            const stock = selLpo ? calcStock(selLpo) : (selProject ? getProjectStock(selProject) : []);
+
+            const handleStartCreate = () => {
+                setForm({ number:generateNextGDNNumber(gdns), date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
+                setSelProject(''); setSelLpo(''); setDeliveries({});
+                setView('create');
+            };
+
+            const handleSendGdn = (gdn) => {
+                const lpo = lpos.find(l=>l.id===gdn.lpoId);
+                const prj = projects.find(p=>p.id===lpo?.projectId);
+                const items = gdnItems.filter(i=>i.gdnId===gdn.id);
+                const totalQty = items.reduce((s,i)=>s+i.qtyDelivered,0);
+                triggerEmailModal(
+                    `[InventoryPro] Goods Delivery Note - ${gdn.number}`,
+                    `Hi Recipient,\n\nPlease find details for Goods Delivery Note ${gdn.number}:\n- Date: ${gdn.date}\n- Project Name: ${prj?.name||'N/A'}\n- Project Number: ${prj?.number||'N/A'}\n- Consignee Name: ${gdn.consigneeName||'N/A'}\n- Consignee Address: ${gdn.consigneeAddress||'N/A'}\n- Total Dispatched Quantity: ${totalQty}\n\nPlease check the attached PDF copy for itemized details.`,
+                    `${gdn.number.toLowerCase()}_delivery.pdf`, 'pdf'
+                );
+            };
+
+            const getProductDetails = (productCode) => {
+                const item = grnItems.find(i=>i.productCode===productCode);
+                return { oemCode:item?.oemCode||'N/A', description:item?.description||'N/A', unit:item?.unit||'Pcs' };
+            };
+
+            return e('div', null,
+                e('div', { className:'card' },
+                    e('div', { className:'card-header' },
+                        e('span', { className:'card-title' }, 'Delivery Log'),
+                        view === 'list' && e('button', { className:'btn btn-primary', onClick:handleStartCreate }, e('i',{className:'ti ti-plus'}), 'Issue New GDN')
+                    ),
+
+                    // ── LIST VIEW ──
+                    view === 'list' ? e('div', null,
+                        e(ListSearchBar, {
+                            value: searchQuery,
+                            onChange: setSearchQuery,
+                            placeholder: 'Search by GDN no., date, project no., consignee...',
+                            onClear: () => setSearchQuery(''),
+                            count: filteredGdns.length,
+                            total: enrichedGdns.length
+                        }),
+                        e('table', null,
+                            e('thead', null, e('tr', null,
+                                e('th',null,'GDN Number'), e('th',null,'Date'), e('th',null,'Project Number'),
+                                e('th',null,'LPO Number'), e('th',null,'Consignee Name'),
+                                e('th',{style:{textAlign:'right',paddingRight:'20px'}},'Action')
+                            )),
+                            e('tbody', null,
+                                filteredGdns.length === 0
+                                    ? e('tr', null, e('td', { colSpan:6, style:{ textAlign:'center', color:'#999', padding:'32px' } },
+                                        searchQuery ? `No deliveries match "${searchQuery}"` : 'No deliveries found.'
+                                      ))
+                                    : filteredGdns.map(d => e('tr', { key:d.id, style:{ cursor:'pointer' }, onClick:()=>{ setSelectedGdn(gdns.find(x=>x.id===d.id)); setView('detail'); } },
+                                        e('td', null, e('span',{className:'badge badge-green'},d.number)),
+                                        e('td', null, d.date),
+                                        e('td', null, d.prj?.number||'N/A'),
+                                        e('td', null, d.lpo?.number||'N/A'),
+                                        e('td', null, d.consigneeName),
+                                        e('td', { style:{ textAlign:'right', paddingRight:'20px' } },
+                                            e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#1D9E75' },
+                                                onClick:(ev)=>{ ev.stopPropagation(); setSelectedGdn(gdns.find(x=>x.id===d.id)); setView('detail'); }
+                                            }, e('i',{className:'ti ti-eye',style:{fontSize:'18px'}}))
+                                        )
+                                    ))
+                            )
+                        )
+                    )
+
+                    // ── CREATE VIEW ──
+                    : view === 'create' ? e('div', null,
+                        e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-package'}),'1. Dispatch Information'),
+                            e('div',{className:'form-grid'},
+                                e('div',{className:'form-group'}, e('label',null,'GDN Number'), e('input',{value:form.number,readOnly:true,style:{background:'#f0f0f0',color:'#666',fontWeight:600}})),
+                                e('div',{className:'form-group'}, e('label',null,'Date'), e('input',{type:'date',value:form.date,onChange:x=>setForm({...form,date:x.target.value})})),
+                                e('div',{className:'form-group'},
+                                    e('label',null,'Project Number'),
+                                    e(SearchableSelect,{ value:selProject, placeholder:'Search Project Number...', options:projects.map(p=>({value:p.id,label:`${p.number} - ${p.name}`})), onChange:val=>{setSelProject(val);setSelLpo('');setDeliveries({});} })
+                                ),
+                                e('div',{className:'form-group'},
+                                    e('label',null,'LPO Number'),
+                                    e(SearchableSelect,{ value:selLpo, placeholder:selProject?'Search LPO Number...':'Choose Project First', disabled:!selProject, options:availLpos.map(l=>({value:l.id,label:l.number})), onChange:val=>{setSelLpo(val);setDeliveries({});} })
+                                )
+                            ),
+                            selProject && e('div',{style:{marginTop:'12px',padding:'10px',background:'#F0F7FF',borderRadius:'8px',border:'0.5px solid rgba(24,95,165,0.15)',fontSize:'13px',display:'flex',flexDirection:'column',gap:'4px'}},
+                                (()=>{
+                                    const prj=projects.find(p=>p.id===selProject);
+                                    const lpo=lpos.find(l=>l.id===selLpo);
+                                    return[
+                                        e('div',{key:'p',style:{color:'#0C447C',fontWeight:600}},`Project Name: ${prj?prj.name:'N/A'} | Location: ${prj?prj.location:'N/A'}`),
+                                        lpo && e('div',{key:'l',style:{color:'#633806',fontWeight:600,marginTop:'2px'}},`Supplier Name: ${lpo.supplier} | Supplier Address: ${lpo.address||'N/A'}`)
+                                    ];
+                                })()
+                            )
+                        ),
+                        e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'2. Consignee Details'),
+                            e('div',{className:'form-grid'},
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Name'), e('input',{value:form.consigneeName,placeholder:'e.g. Ahmad Logistics / Site Manager',onChange:x=>setForm({...form,consigneeName:x.target.value})})),
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Address'), e('input',{value:form.consigneeAddress,placeholder:'e.g. Gate 4, Terminal 3',onChange:x=>setForm({...form,consigneeAddress:x.target.value})}))
+                            )
+                        ),
+                        (selProject||selLpo) && e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}), selLpo?'3. Available Stock Under Selected LPO':'3. Available Stock Under Selected Project (Select LPO to Dispatch)'),
+                            e('table',null,
+                                e('thead',null,e('tr',null,
+                                    e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
+                                    e('th',{style:{textAlign:'right'}},'Available Qty'), e('th',{style:{textAlign:'right'}},'Issue Qty')
+                                )),
+                                e('tbody',null, stock.length===0
+                                    ? e('tr',null,e('td',{colSpan:5,style:{textAlign:'center',color:'#999',padding:'24px'}},'No products received yet for this scope.'))
+                                    : stock.map(s=>e('tr',{key:s.productCode},
+                                        e('td',null,e('span',{className:'badge badge-blue'},s.productCode)),
+                                        e('td',null,s.oemCode||'N/A'),
+                                        e('td',null,s.description),
+                                        e('td',{className:'available-qty',style:{textAlign:'right'}},s.available+' '+(s.unit||'Pcs')),
+                                        e('td',null,e('input',{type:'number',placeholder:selLpo?'0':'Select LPO',disabled:!selLpo,value:deliveries[s.productCode]||'',style:{width:90,textAlign:'right',marginLeft:'auto',display:'block',background:!selLpo?'#f5f5f2':'#fff'},onChange:x=>{
+                                            const val=parseFloat(x.target.value);
+                                            if(val>s.available){alert(`Cannot exceed available stock of ${s.available}`);return;}
+                                            setDeliveries({...deliveries,[s.productCode]:x.target.value});
+                                        }}))
+                                    ))
+                                )
+                            )
+                        ),
+                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
+                            e('button',{className:'btn',onClick:()=>setView('list')},'Cancel'),
+                            e('button',{className:'btn btn-primary',onClick: async () => {
+                                            if (!selLpo || !form.number || !form.consigneeName) return alert('Select Project/LPO and enter Consignee Name');
+                                            const itemsToDeliver = Object.entries(deliveries)
+                                                .filter(([, q]) => parseFloat(q) > 0)
+                                                .map(([code, q]) => {
+                                                    const stockItem = stock.find(s => s.productCode === code);
+                                                    return {
+                                                        product_code: code,
+                                                        oem_code: stockItem?.oemCode || '',
+                                                        description: stockItem?.description || '',
+                                                        unit: stockItem?.unit || 'Pcs',
+                                                        qty_delivered: parseFloat(q)
+                                                    };
+                                                });
+                                            if (itemsToDeliver.length === 0) return alert('Enter at least one quantity to dispatch');
+
+                                            const { data: gdnData, error: gdnError } = await db.from('gdns')
+                                                .insert({ lpo_id: selLpo, number: form.number, date: form.date, consignee_name: form.consigneeName, consignee_address: form.consigneeAddress })
+                                                .select().single();
+                                            if (gdnError) return alert('Error saving GDN: ' + gdnError.message);
+                                            const newGdn = toCamel(gdnData);
+
+                                            const itemsWithGdn = itemsToDeliver.map(it => ({ ...it, gdn_id: newGdn.id }));
+                                            const { data: diData, error: diError } = await db.from('gdn_items').insert(itemsWithGdn).select();
+                                            if (diError) return alert('Error saving GDN items: ' + diError.message);
+
+                                            setGdns(prev => [...prev, newGdn]);
+                                            setGdnItems(prev => [...prev, ...diData.map(toCamel)]);
+                                            setView('list');
+                                        }},'Record GDN')
+                        )
+                    )
+
+                    // ── DETAIL VIEW ──
+                    : view === 'detail' && selectedGdn ? e('div',{className:'print-area'},
+                        e('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',borderBottom:'1px solid rgba(0,0,0,0.1)',paddingBottom:'16px'}},
+                            e('div',null,
+                                e('h3',{style:{fontSize:'18px',fontWeight:600}},'Goods Delivery Note Details'),
+                                e('p',{style:{fontSize:'13px',color:'#666',marginTop:'4px'}},'Complete record of the dispatched goods')
+                            ),
+                            e('div',{style:{display:'flex',gap:'8px'},className:'no-print'},
+                                e('button',{className:'btn btn-primary',onClick:()=>handleSendGdn(selectedGdn)}, e('i',{className:'ti ti-send',style:{marginRight:'6px'}}),'Send to Recipient'),
+                                e('button',{className:'btn',onClick:()=>window.print()}, e('i',{className:'ti ti-printer',style:{marginRight:'6px'}}),'Print Receipt'),
+                                e('button',{className:'btn',onClick:()=>{setView('list');setSelectedGdn(null);}}, e('i',{className:'ti ti-arrow-left',style:{marginRight:'6px'}}),'Back to List')
+                            )
+                        ),
+                        e('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'24px'}},
+                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-building'}),'Project & Header Information'),
+                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                    ...[['Project Number:',(()=>{const l=lpos.find(x=>x.id===selectedGdn.lpoId);return projects.find(p=>p.id===l?.projectId)?.number||'N/A';})()],
+                                        ['Project Name:',(()=>{const l=lpos.find(x=>x.id===selectedGdn.lpoId);return projects.find(p=>p.id===l?.projectId)?.name||'N/A';})()],
+                                        ['Location:',(()=>{const l=lpos.find(x=>x.id===selectedGdn.lpoId);return projects.find(p=>p.id===l?.projectId)?.location||'N/A';})()],
+                                        ['GDN Number:',selectedGdn.number],
+                                        ['Date:',selectedGdn.date]
+                                    ].flatMap(([label,val],i)=>[
+                                        e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},label),
+                                        e('span',{key:'v'+i,style:label==='GDN Number:'?{fontWeight:600,color:'#27500A'}:{}},val)
+                                    ])
+                                )
+                            ),
+                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'Consignee & LPO Information'),
+                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                    ...[['Consignee Name:',selectedGdn.consigneeName||'N/A'],
+                                        ['Consignee Address:',selectedGdn.consigneeAddress||'N/A'],
+                                        ['LPO Number:',lpos.find(l=>l.id===selectedGdn.lpoId)?.number||'N/A'],
+                                        ['Supplier Name:',lpos.find(l=>l.id===selectedGdn.lpoId)?.supplier||'N/A']
+                                    ].flatMap(([label,val],i)=>[
+                                        e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},label),
+                                        e('span',{key:'v'+i,style:label==='LPO Number:'?{fontWeight:600,color:'#185FA5'}:{}},val)
+                                    ])
+                                )
+                            )
+                        ),
+                        e('div',{className:'form-section',style:{background:'#fff',margin:0}},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}),'Delivered Products List'),
+                            e('table',null,
+                                e('thead',null,e('tr',null,
+                                    e('th',{style:{width:'40px'}},'#'), e('th',null,'Product Code'), e('th',null,'OEM Code'),
+                                    e('th',null,'Description'), e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Delivered Quantity')
+                                )),
+                                e('tbody',null,(()=>{
+                                    const items=gdnItems.filter(i=>i.gdnId===selectedGdn.id);
+                                    return[
+                                        ...items.map((it,idx)=>{
+                                            const det=getProductDetails(it.productCode);
+                                            return e('tr',{key:it.id||idx},
+                                                e('td',null,idx+1),
+                                                e('td',null,e('span',{className:'badge badge-green'},it.productCode)),
+                                                e('td',null,det.oemCode), e('td',null,det.description), e('td',null,det.unit),
+                                                e('td',{style:{textAlign:'right',fontWeight:600}},it.qtyDelivered)
+                                            );
+                                        }),
+                                        e('tr',{key:'total',style:{background:'#f9f9f7'}},
+                                            e('td',{colSpan:5,style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},'Grand Total:'),
+                                            e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px',color:'#27500A'}},items.reduce((s,it)=>s+it.qtyDelivered,0))
+                                        )
+                                    ];
+                                })())
+                            )
+                        ),
+                        e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'20px'},className:'no-print'},
+                            e('button',{className:'btn btn-primary',onClick:()=>{setView('list');setSelectedGdn(null);}},'Close Details')
+                        )
+                    ) : null
+                )
+            );
+        }
+
+        // ─── Stock Inquiry ──────────────────────────────────────────────────────
+        function StockInquiry({ projects, lpos, calcStock }) {
+            const [searchQuery, setSearchQuery] = useState('');
+            const allStock = useMemo(() => {
+                const results=[];
+                lpos.forEach(l=>{
+                    const prj=projects.find(p=>p.id===l.projectId);
+                    calcStock(l.id).forEach(i=>results.push({...i,projectName:prj?.name||'N/A',projectNo:prj?.number||'N/A',lpoNo:l.number}));
+                });
+                return results;
+            }, [projects,lpos,calcStock]);
+            const filteredStock = useMemo(() => {
+                if(!searchQuery) return allStock;
+                const q=searchQuery.toLowerCase();
+                return allStock.filter(s=>(s.projectName&&s.projectName.toLowerCase().includes(q))||(s.projectNo&&s.projectNo.toLowerCase().includes(q))||(s.lpoNo&&s.lpoNo.toLowerCase().includes(q))||(s.productCode&&s.productCode.toLowerCase().includes(q))||(s.oemCode&&s.oemCode.toLowerCase().includes(q)));
+            }, [allStock,searchQuery]);
+            return e('div',null,
+                e('div',{className:'card'},
+                    e('div',{className:'card-header',style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'12px',marginBottom:'16px'}},
+                        e('span',{className:'card-title'},'Global Inventory Balance'),
+                        e('div',{style:{position:'relative',width:'280px'}},
+                            e('input',{value:searchQuery,placeholder:'Search name, number, code...',onChange:x=>setSearchQuery(x.target.value),style:{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'8px',border:'1px solid rgba(0,0,0,0.15)',fontSize:'13px',outline:'none'}}),
+                            e('i',{className:'ti ti-search',style:{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#999',fontSize:'14px'}})
+                        )
+                    ),
+                    e('table',null,
+                        e('thead',null,e('tr',null,
+                            e('th',null,'Project Name'), e('th',null,'Project Number'), e('th',null,'LPO Number'),
+                            e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'), e('th',null,'Unit'),
+                            e('th',{style:{textAlign:'right'}},'Received Quantity'), e('th',{style:{textAlign:'right'}},'Delivered Quantity'), e('th',{style:{textAlign:'right'}},'Available Quantity')
+                        )),
+                        e('tbody',null, filteredStock.length===0
+                            ? e('tr',null,e('td',{colSpan:10,style:{textAlign:'center',color:'#999',padding:'24px'}},'No matching stock records found.'))
+                            : filteredStock.map((s,idx)=>e('tr',{key:idx},
+                                e('td',null,s.projectName),
+                                e('td',null,e('span',{className:'badge'},s.projectNo)),
+                                e('td',null,s.lpoNo),
+                                e('td',null,e('span',{className:'badge badge-blue'},s.productCode)),
+                                e('td',null,s.oemCode||'N/A'),
+                                e('td',null,s.description),
+                                e('td',null,s.unit||'Pcs'),
+                                e('td',{style:{textAlign:'right'}},s.received),
+                                e('td',{style:{textAlign:'right'}},s.delivered),
+                                e('td',{className:'available-qty',style:{textAlign:'right',fontWeight:600}},s.available)
+                            ))
+                        )
+                    )
+                )
+            );
+        }
+
+        // ─── Reports ────────────────────────────────────────────────────────────
+        function Reports({ projects, lpos, grns, gdns, grnItems, gdnItems, calcStock, triggerEmailModal }) {
+            const [reportType, setReportType] = useState('project');
+            const [projectSel, setProjectSel] = useState('');
+            const [lpoSel, setLpoSel] = useState('');
+            const [selection, setSelection] = useState('');
+            const [oemInput, setOemInput] = useState('');
+
+            const exportToExcel = (data, name) => {
+                const ws=XLSX.utils.json_to_sheet(data);
+                const wb=XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb,ws,"InventoryReport");
+                XLSX.writeFile(wb,`${name}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            };
+
+            const getProductDetails = (productCode) => {
+                const item=grnItems.find(i=>i.productCode===productCode);
+                return { oemCode:item?.oemCode||'N/A', description:item?.description||'N/A', unit:item?.unit||'Pcs' };
+            };
+
+            const reportData = useMemo(() => {
+                const filteredLpos = projectSel ? lpos.filter(l=>l.projectId===projectSel) : [];
+                const finalLpoIds = lpoSel ? [lpoSel] : filteredLpos.map(l=>l.id);
+                switch(reportType){
+                    case 'project':{
+                        if(!projectSel) return [];
+                        const prj=projects.find(p=>p.id===projectSel);
+                        const rows=[];
+                        lpos.filter(l=>finalLpoIds.includes(l.id)).forEach(l=>{
+                            calcStock(l.id).forEach(s=>rows.push({'Project Name':prj.name,'Project Number':prj.number,'LPO Number':l.number,'Product Code':s.productCode,'OEM Code':s.oemCode,'Description':s.description,'Unit':s.unit,'Received Quantity':s.received,'Delivered Quantity':s.delivered,'Available Quantity':s.available}));
+                        });
+                        return rows;
+                    }
+                    case 'lpo':{
+                        const lpo=lpos.find(l=>l.id===selection);
+                        if(!lpo) return [];
+                        const prj=projects.find(p=>p.id===lpo.projectId);
+                        return calcStock(lpo.id).map(s=>({'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','LPO Number':lpo.number,'Product Code':s.productCode,'OEM Code':s.oemCode,'Description':s.description,'Unit':s.unit,'Received Quantity':s.received,'Delivered Quantity':s.delivered,'Available Quantity':s.available}));
+                    }
+                    case 'grn':{
+                        const grn=grns.find(g=>g.id===selection);
+                        if(!grn) return [];
+                        const lpo=lpos.find(l=>l.id===grn.lpoId);
+                        const prj=projects.find(p=>p.id===lpo?.projectId);
+                        return grnItems.filter(i=>i.grnId===grn.id).map(i=>({'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','GRN Number':grn.number,'Date':grn.date,'Product Code':i.productCode,'OEM Code':i.oemCode||'N/A','Description':i.description,'Unit':i.unit||'Pcs','Received Quantity':i.qty,'Unit Price':i.unitPrice,'Total Price':i.totalPrice}));
+                    }
+                    case 'gdn':{
+                        const gdn=gdns.find(d=>d.id===selection);
+                        if(!gdn) return [];
+                        const lpo=lpos.find(l=>l.id===gdn.lpoId);
+                        const prj=projects.find(p=>p.id===lpo?.projectId);
+                        return gdnItems.filter(i=>i.gdnId===gdn.id).map(i=>{
+                            const det=getProductDetails(i.productCode);
+                            return {'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','GDN Number':gdn.number,'Date':gdn.date,'Product Code':i.productCode,'OEM Code':det.oemCode,'Description':det.description,'Unit':det.unit,'Delivered Quantity':i.qtyDelivered};
+                        });
+                    }
+                    case 'oem':{
+                        if(!oemInput) return [];
+                        return grnItems.filter(i=>i.oemCode.toLowerCase().includes(oemInput.toLowerCase())).map(i=>{
+                            const grn=grns.find(g=>g.id===i.grnId);
+                            const lpo=lpos.find(l=>l.id===grn?.lpoId);
+                            const prj=projects.find(p=>p.id===lpo?.projectId);
+                            return {'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','OEM Code':i.oemCode||'N/A','Product Code':i.productCode,'Description':i.description,'Unit':i.unit||'Pcs','GRN Number':grn?.number||'N/A','Received Quantity':i.qty};
+                        });
+                    }
+                    default: return [];
+                }
+            }, [reportType, projectSel, lpoSel, selection, oemInput, projects, lpos, grns, gdns, grnItems, gdnItems, calcStock]);
+
+            // Build SearchableSelect option labels with extra context for easy scanning
+            const grnOptions = useMemo(() => grns.map(g => {
+                const lpo=lpos.find(l=>l.id===g.lpoId);
+                const prj=projects.find(p=>p.id===lpo?.projectId);
+                return { value:g.id, label:`${g.number}  ·  ${g.date}  ·  ${prj?.number||'?'}  ·  ${lpo?.supplier||'?'}` };
+            }), [grns, lpos, projects]);
+
+            const gdnOptions = useMemo(() => gdns.map(d => {
+                const lpo=lpos.find(l=>l.id===d.lpoId);
+                const prj=projects.find(p=>p.id===lpo?.projectId);
+                return { value:d.id, label:`${d.number}  ·  ${d.date}  ·  ${prj?.number||'?'}  ·  ${d.consigneeName||'?'}` };
+            }), [gdns, lpos, projects]);
+
+            const lpoOptions = useMemo(() => lpos.map(l => {
+                const prj=projects.find(p=>p.id===l.projectId);
+                return { value:l.id, label:`${l.number}  ·  ${prj?.number||'?'}  ·  ${l.supplier}` };
+            }), [lpos, projects]);
+
+            return e('div', null,
+                e('div', { className:'card' },
+                    e('div', { className:'card-header' }, e('span',{className:'card-title'},'Enterprise Reporting Hub')),
+
+                    e('div', { className:'metric-grid', style:{ marginBottom:20 } },
+                        [
+                            { id:'project', label:'Project Statement' },
+                            { id:'lpo', label:'LPO Ledger' },
+                            { id:'grn', label:'GRN Report' },
+                            { id:'gdn', label:'GDN Report' },
+                            { id:'oem', label:'OEM Code Report' }
+                        ].map(item => e('div', {
+                            key: item.id,
+                            className: 'metric-card',
+                            style:{ cursor:'pointer', border:reportType===item.id?'2px solid #185FA5':'0.5px solid rgba(0,0,0,0.12)', background:reportType===item.id?'#F0F7FF':'#fff' },
+                            onClick: () => { setReportType(item.id); setSelection(''); setProjectSel(''); setLpoSel(''); setOemInput(''); }
+                        }, e('div',{className:'label'},'Report Type'), e('div',{className:'value',style:{fontSize:13}},item.label)))
+                    ),
+
+                    e('div', { className:'form-section' },
+                        e('div', { className:'form-grid' },
+                            // Project report filters
+                            reportType === 'project' && [
+                                e('div',{className:'form-group',key:'proj-sel'},
+                                    e('label',null,'Project Number'),
+                                    e(SearchableSelect,{ value:projectSel, placeholder:'Type to search projects...', options:projects.map(p=>({value:p.id,label:`${p.number} — ${p.name}`})), onChange:val=>{setProjectSel(val);setLpoSel('');} })
+                                ),
+                                projectSel && e('div',{className:'form-group',key:'lpo-filter'},
+                                    e('label',null,'LPO Number (Optional — leave blank for all)'),
+                                    e(SearchableSelect,{ value:lpoSel, placeholder:'All LPOs under project', options:[{value:'',label:'All LPOs under this project'},...lpos.filter(l=>l.projectId===projectSel).map(l=>({value:l.id,label:`${l.number} · ${l.supplier}`}))], onChange:val=>setLpoSel(val) })
+                                )
+                            ],
+
+                            // LPO filter
+                            reportType === 'lpo' && e('div',{className:'form-group',key:'lpo-sel'},
+                                e('label',null,'LPO Number'),
+                                e('p',{style:{fontSize:'11px',color:'#999',marginBottom:'4px',marginTop:'-2px'}},'Search by LPO no., project no., or supplier name'),
+                                e(SearchableSelect,{ value:selection, placeholder:'Type to search LPOs...', options:lpoOptions, onChange:val=>setSelection(val) })
+                            ),
+
+                            // GRN filter with rich search
+                            reportType === 'grn' && e('div',{className:'form-group',key:'grn-sel'},
+                                e('label',null,'GRN Number'),
+                                e('p',{style:{fontSize:'11px',color:'#999',marginBottom:'4px',marginTop:'-2px'}},'Search by GRN no., date, project no., or supplier name'),
+                                e(SearchableSelect,{ value:selection, placeholder:'Type to search GRNs...', options:grnOptions, onChange:val=>setSelection(val) })
+                            ),
+
+                            // GDN filter with rich search
+                            reportType === 'gdn' && e('div',{className:'form-group',key:'gdn-sel'},
+                                e('label',null,'GDN Number'),
+                                e('p',{style:{fontSize:'11px',color:'#999',marginBottom:'4px',marginTop:'-2px'}},'Search by GDN no., date, project no., or consignee name'),
+                                e(SearchableSelect,{ value:selection, placeholder:'Type to search GDNs...', options:gdnOptions, onChange:val=>setSelection(val) })
+                            ),
+
+                            // OEM filter
+                            reportType === 'oem' && e('div',{className:'form-group',key:'oem'},
+                                e('label',null,'OEM Code'),
+                                e('input',{ placeholder:'Type OEM Code...', value:oemInput, onChange:x=>setOemInput(x.target.value) })
+                            )
+                        ),
+
+                        reportData.length > 0 && e('div', { style:{ marginTop:16, display:'flex', gap:8 } },
+                            ['grn','gdn'].includes(reportType) ? [
+                                e('button',{key:'print',className:'btn btn-primary',onClick:()=>window.print()}, e('i',{className:'ti ti-printer',style:{marginRight:'6px'}}),'Print / Export PDF'),
+                                e('button',{key:'send',className:'btn',onClick:()=>{
+                                    if(reportType==='grn'){
+                                        const grn=grns.find(g=>g.id===selection);
+                                        const lpo=lpos.find(l=>l.id===grn?.lpoId);
+                                        const prj=projects.find(p=>p.id===lpo?.projectId);
+                                        const total=reportData.reduce((s,i)=>s+(i['Total Price']||0),0);
+                                        triggerEmailModal(`[InventoryPro] Goods Receipt Note - ${grn?.number||'N/A'}`,`Hi Recipient,\n\nPlease find details for Goods Receipt Note ${grn?.number||'N/A'}:\n- Date: ${grn?.date||'N/A'}\n- Project Name: ${prj?.name||'N/A'}\n- Project Number: ${prj?.number||'N/A'}\n- Supplier Name: ${lpo?.supplier||'N/A'}\n- Total Value: $${total.toLocaleString(undefined,{minimumFractionDigits:2})}\n\nPlease check the attached PDF copy for itemized details.`,`${grn?.number?.toLowerCase()||'grn'}_receipt.pdf`,'pdf');
+                                    } else {
+                                        const gdn=gdns.find(d=>d.id===selection);
+                                        const lpo=lpos.find(l=>l.id===gdn?.lpoId);
+                                        const prj=projects.find(p=>p.id===lpo?.projectId);
+                                        const totalQty=reportData.reduce((s,i)=>s+(i['Delivered Quantity']||0),0);
+                                        triggerEmailModal(`[InventoryPro] Goods Delivery Note - ${gdn?.number||'N/A'}`,`Hi Recipient,\n\nPlease find details for Goods Delivery Note ${gdn?.number||'N/A'}:\n- Date: ${gdn?.date||'N/A'}\n- Project Name: ${prj?.name||'N/A'}\n- Project Number: ${prj?.number||'N/A'}\n- Consignee Name: ${gdn?.consigneeName||'N/A'}\n- Consignee Address: ${gdn?.consigneeAddress||'N/A'}\n- Total Dispatched Quantity: ${totalQty}\n\nPlease check the attached PDF copy for itemized details.`,`${gdn?.number?.toLowerCase()||'gdn'}_delivery.pdf`,'pdf');
+                                    }
+                                }}, e('i',{className:'ti ti-send',style:{marginRight:'6px'}}),'Send to Recipient')
+                            ] : [
+                                e('button',{key:'excel',className:'btn btn-success',onClick:()=>exportToExcel(reportData,`${reportType}_report`)}, e('i',{className:'ti ti-file-spreadsheet'}),'Export Excel'),
+                                e('button',{key:'send',className:'btn btn-primary',onClick:()=>{
+                                    const reportName=reportType==='project'?'Project Statement':reportType==='lpo'?'LPO Ledger':'OEM Code Report';
+                                    triggerEmailModal(`[InventoryPro] Report - ${reportName}`,`Hi Recipient,\n\nPlease find the generated report for "${reportName}" attached as an Excel spreadsheet.\n- Export Date: ${new Date().toISOString().split('T')[0]}\n- Total Rows: ${reportData.length}\n\nPlease review the attached Excel file for the complete data.`,`${reportType}_report.xlsx`,'excel');
+                                }}, e('i',{className:'ti ti-send',style:{marginRight:'6px'}}),'Send to Recipient')
+                            ]
+                        )
+                    )
+                ),
+
+                reportData.length > 0 ? (
+                    ['grn','gdn'].includes(reportType) ? (
+                        e('div', { className:'card print-area', style:{ padding:'24px' } },
+                            e('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',borderBottom:'1px solid rgba(0,0,0,0.1)',paddingBottom:'16px'}},
+                                e('div',null,
+                                    e('h3',{style:{fontSize:'18px',fontWeight:600}}, reportType==='grn'?'Goods Receipt Note Details':'Goods Delivery Note Details'),
+                                    e('p',{style:{fontSize:'13px',color:'#666',marginTop:'4px'}}, reportType==='grn'?'Complete record of the received goods':'Complete record of the dispatched goods')
+                                )
+                            ),
+                            (()=>{
+                                if(reportType==='grn'){
+                                    const grn=grns.find(g=>g.id===selection); if(!grn) return null;
+                                    const lpo=lpos.find(l=>l.id===grn.lpoId);
+                                    const prj=projects.find(p=>p.id===lpo?.projectId);
+                                    const items=grnItems.filter(i=>i.grnId===grn.id);
+                                    const grandTotal=items.reduce((s,it)=>s+it.totalPrice,0);
+                                    return[
+                                        e('div',{key:'hdr',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'24px'}},
+                                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-building'}),'Project & Header Information'),
+                                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                                    ...[['Project Number:',prj?.number||'N/A'],['Project Name:',prj?.name||'N/A'],['Location:',prj?.location||'N/A'],['GRN Number:',grn.number],['Receipt Date:',grn.date],['Remarks:',grn.remarks||'No remarks provided']].flatMap(([l,v],i)=>[e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},l),e('span',{key:'v'+i,style:l==='GRN Number:'?{fontWeight:600,color:'#185FA5'}:{}},v)])
+                                                )
+                                            ),
+                                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-file-invoice'}),'LPO & Supplier Information'),
+                                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                                    ...[['LPO Number:',lpo?.number||'N/A'],['Supplier Name:',lpo?.supplier||'N/A'],['Supplier Address:',lpo?.address||'N/A']].flatMap(([l,v],i)=>[e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},l),e('span',{key:'v'+i,style:l==='LPO Number:'?{fontWeight:600,color:'#185FA5'}:{}},v)])
+                                                )
+                                            )
+                                        ),
+                                        e('div',{key:'items',className:'form-section',style:{background:'#fff',margin:0}},
+                                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}),'Received Products List'),
+                                            e('table',null,
+                                                e('thead',null,e('tr',null,e('th',{style:{width:'40px'}},'#'),e('th',null,'Product Code'),e('th',null,'OEM Code'),e('th',null,'Description'),e('th',null,'Unit'),e('th',{style:{textAlign:'right'}},'Quantity'),e('th',{style:{textAlign:'right'}},'Unit Price'),e('th',{style:{textAlign:'right'}},'Total Price'))),
+                                                e('tbody',null,[...items.map((it,idx)=>e('tr',{key:it.id||idx},e('td',null,idx+1),e('td',null,e('span',{className:'badge badge-blue'},it.productCode)),e('td',null,it.oemCode||'N/A'),e('td',null,it.description),e('td',null,it.unit),e('td',{style:{textAlign:'right'}},it.qty),e('td',{style:{textAlign:'right'}},'$'+it.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})),e('td',{style:{textAlign:'right',fontWeight:600}},'$'+it.totalPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})))),e('tr',{key:'tot',style:{background:'#f9f9f7'}},e('td',{colSpan:5,style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},'Grand Total:'),e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},items.reduce((s,it)=>s+it.qty,0)),e('td',null),e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px',color:'#185FA5',fontSize:'15px'}},'$'+grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})))])
+                                            )
+                                        )
+                                    ];
+                                } else {
+                                    const gdn=gdns.find(d=>d.id===selection); if(!gdn) return null;
+                                    const lpo=lpos.find(l=>l.id===gdn.lpoId);
+                                    const prj=projects.find(p=>p.id===lpo?.projectId);
+                                    const items=gdnItems.filter(i=>i.gdnId===gdn.id);
+                                    const gpd=(pc)=>{const it=grnItems.find(i=>i.productCode===pc);return{oemCode:it?.oemCode||'N/A',description:it?.description||'N/A',unit:it?.unit||'Pcs'};};
+                                    return[
+                                        e('div',{key:'hdr',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'24px'}},
+                                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-building'}),'Project & Header Information'),
+                                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                                    ...[['Project Number:',prj?.number||'N/A'],['Project Name:',prj?.name||'N/A'],['Location:',prj?.location||'N/A'],['GDN Number:',gdn.number],['Date:',gdn.date]].flatMap(([l,v],i)=>[e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},l),e('span',{key:'v'+i,style:l==='GDN Number:'?{fontWeight:600,color:'#27500A'}:{}},v)])
+                                                )
+                                            ),
+                                            e('div',{className:'form-section',style:{background:'#fcfcfc',margin:0}},
+                                                e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'Consignee & LPO Information'),
+                                                e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
+                                                    ...[['Consignee Name:',gdn.consigneeName||'N/A'],['Consignee Address:',gdn.consigneeAddress||'N/A'],['LPO Number:',lpo?.number||'N/A'],['Supplier Name:',lpo?.supplier||'N/A']].flatMap(([l,v],i)=>[e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},l),e('span',{key:'v'+i,style:l==='LPO Number:'?{fontWeight:600,color:'#185FA5'}:{}},v)])
+                                                )
+                                            )
+                                        ),
+                                        e('div',{key:'items',className:'form-section',style:{background:'#fff',margin:0}},
+                                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}),'Delivered Products List'),
+                                            e('table',null,
+                                                e('thead',null,e('tr',null,e('th',{style:{width:'40px'}},'#'),e('th',null,'Product Code'),e('th',null,'OEM Code'),e('th',null,'Description'),e('th',null,'Unit'),e('th',{style:{textAlign:'right'}},'Delivered Quantity'))),
+                                                e('tbody',null,[...items.map((it,idx)=>{const d=gpd(it.productCode);return e('tr',{key:it.id||idx},e('td',null,idx+1),e('td',null,e('span',{className:'badge badge-green'},it.productCode)),e('td',null,d.oemCode),e('td',null,d.description),e('td',null,d.unit),e('td',{style:{textAlign:'right',fontWeight:600}},it.qtyDelivered));}),e('tr',{key:'tot',style:{background:'#f9f9f7'}},e('td',{colSpan:5,style:{fontWeight:700,textAlign:'right',padding:'16px 10px'}},'Grand Total:'),e('td',{style:{fontWeight:700,textAlign:'right',padding:'16px 10px',color:'#27500A'}},items.reduce((s,it)=>s+it.qtyDelivered,0)))])
+                                            )
+                                        )
+                                    ];
+                                }
+                            })()
+                        )
+                    ) : (
+                        e('div', { className:'card' },
+                            e('div',{style:{overflowX:'auto'}},
+                                e('table',null,
+                                    e('thead',null,e('tr',null,Object.keys(reportData[0]).map(k=>e('th',{key:k},k)))),
+                                    e('tbody',null,reportData.map((row,idx)=>e('tr',{key:idx},
+                                        Object.entries(row).map(([k,v],i)=>e('td',{key:i},
+                                            k==='Available Quantity'&&v>0?e('span',{className:'available-qty'},v):
+                                            ['Product Code','OEM Code','LPO Number','Project Number','GRN Number','GDN Number'].includes(k)?e('span',{className:'badge badge-blue'},v):
+                                            k==='Total Price'||k==='Unit Price'?'$'+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):v
+                                        ))
+                                    )))
+                                )
+                            )
+                        )
+                    )
+                ) : e('div', { className:'card', style:{ padding:'48px', textAlign:'center', color:'#999' } }, 'Select filters above to generate a report.')
+            );
+        }
+
+        function BackupPage({ projects, lpos, grns, grnItems, gdns, gdnItems, calcStock }) {
+            const [backups, setBackups] = useState([]);
+            const [loadingBackups, setLoadingBackups] = useState(true);
+
+            useEffect(() => {
+                async function load() {
+                    const { data } = await db.from('backups').select('*').order('created_at', { ascending: false });
+                    setBackups((data || []).map(toCamel));
+                    setLoadingBackups(false);
+                }
+                load();
+            }, []);
+
+            const runBackup = async () => {
+                const month = new Date().toISOString().slice(0, 7);
+                const wb = buildBackupWorkbook(lpos, projects, calcStock, grns, grnItems, gdns, gdnItems);
+                XLSX.writeFile(wb, `backup_${month}.xlsx`);
+                const { data, error } = await db.from('backups').insert({ month }).select().single();
+                if (!error) setBackups(prev => [toCamel(data), ...prev]);
+            };
+
+            const reDownload = () => {
+                const wb = buildBackupWorkbook(lpos, projects, calcStock, grns, grnItems, gdns, gdnItems);
+                XLSX.writeFile(wb, `backup_redownload_${new Date().toISOString().split('T')[0]}.xlsx`);
+            };
+
+            return e('div', null,
+                e('div', { className:'card' },
+                    e('div', { className:'card-header' },
+                        e('span', { className:'card-title' }, 'Monthly Backup'),
+                        e('button', { className:'btn btn-primary', onClick: runBackup }, e('i', { className:'ti ti-download' }), 'Backup Now')
+                    ),
+                    e('p', { style: { fontSize:'12px', color:'#666', marginBottom:'16px' } }, 'Exports Stock Balance, GRN Transactions, and GDN Transactions as a multi-sheet Excel file.')
+                ),
+                e('div', { className:'card' },
+                    e('div', { className:'card-header' }, e('span', { className:'card-title' }, 'Backup History')),
+                    loadingBackups ? e('p', { style:{ color:'#999', fontSize:'13px' } }, 'Loading...') :
+                    e('table', null,
+                        e('thead', null, e('tr', null,
+                            e('th', null, 'Month'),
+                            e('th', null, 'Backed Up On'),
+                            e('th', { style:{ textAlign:'right' } }, 'Action')
+                        )),
+                        e('tbody', null,
+                            backups.length === 0
+                                ? e('tr', null, e('td', { colSpan:3, style:{ textAlign:'center', color:'#999', padding:'24px' } }, 'No backups yet.'))
+                                : backups.map(b => e('tr', { key:b.id },
+                                    e('td', null, b.month),
+                                    e('td', null, new Date(b.createdAt).toLocaleString()),
+                                    e('td', { style:{ textAlign:'right' } }, e('button', { className:'btn', onClick: reDownload }, 'Re-download'))
+                                ))
+                        )
+                    )
+                )
+            );
+        }
+
+        ReactDOM.render(e(App), document.getElementById('root'));
+    </script>
+</body>
+</html>
