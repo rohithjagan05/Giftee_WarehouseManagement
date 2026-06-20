@@ -81,6 +81,87 @@
             .print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
             .no-print { display: none !important; }
         }
+        /* ── Mobile Layout ─────────────────────────────────────────────────────── */
+        .hamburger {
+            display: none;
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 200;
+            background: #fff;
+            border: 0.5px solid rgba(0,0,0,0.15);
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 150;
+        }
+
+        @media (max-width: 768px) {
+            .hamburger { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #185FA5; }
+            
+            .sidebar {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                z-index: 160;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                width: 240px;
+                overflow-y: auto;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+                box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+            }
+            .sidebar-overlay.open { display: block; }
+
+            .main { width: 100%; }
+
+            .topbar {
+                padding: 14px 16px 14px 56px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+            .topbar h1 { font-size: 14px; }
+
+            .content { padding: 12px; }
+
+            .metric-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+            .metric-card .value { font-size: 20px; }
+
+            .card { padding: 14px; margin-bottom: 12px; }
+            .card-header { flex-wrap: wrap; gap: 8px; }
+
+            .form-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .form-group input, .form-group select { font-size: 16px; }
+
+            table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+            .btn { font-size: 12px; padding: 7px 12px; }
+            .btn-primary { width: auto; }
+
+            .search-box { max-width: 100%; }
+
+            /* Stack detail view grids */
+            div[style*="grid-template-columns: 1fr 1fr"] {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 12px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -227,6 +308,7 @@
         // ─── App ────────────────────────────────────────────────────────────────
         function App() {
             const [page, setPage] = useState('dashboard');
+            const [sidebarOpen, setSidebarOpen] = useState(false);
             const [projects, setProjects] = useState([]);
             const [lpos, setLpos] = useState([]);
             const [grns, setGrns] = useState([]);
@@ -546,20 +628,24 @@
             }
             if (loading) return e('div', { style: { display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', color:'#666', fontSize:'14px' } }, 'Loading...');
             return e('div', { className:'app' },
-                e('div', { className:'sidebar no-print' },
+                    e('button', { className:'hamburger no-print', onClick:()=>setSidebarOpen(true) },
+                        e('i',{className:'ti ti-menu-2', style:{fontSize:'18px'}}), 'Menu'
+                    ),
+                    e('div', { className:'sidebar-overlay'+(sidebarOpen?' open':''), onClick:()=>setSidebarOpen(false) }),
+                e('div', { className:'sidebar no-print'+(sidebarOpen?' open':'') },
                     e('div', { className:'sidebar-logo' }, e('h2', null, 'InventoryPro'), e('p', null, 'Consolidated Workspace')),
                     e('div', { className:'nav-section' },
                         e('div', { className:'nav-label' }, 'Overview'),
-                        e('div', { className:'nav-item'+(page==='dashboard'?' active':''), onClick:()=>setPage('dashboard') }, e('i',{className:'ti ti-layout-dashboard'}), 'Dashboard'),
+                        e('div', { className:'nav-item'+(page==='dashboard'?' active':''), onClick:()=>{setPage('dashboard'); setSidebarOpen(false); }}, e('i',{className:'ti ti-layout-dashboard'}), 'Dashboard'),
                         e('div', { className:'nav-label' }, 'Operations'),
-                        e('div', { className:'nav-item'+(page==='grn'?' active':''), onClick:()=>setPage('grn') }, e('i',{className:'ti ti-package'}), 'Goods Receipt (GRN)'),
-                        e('div', { className:'nav-item'+(page==='gdn'?' active':''), onClick:()=>setPage('gdn') }, e('i',{className:'ti ti-truck-delivery'}), 'Goods Delivery (GDN)'),
-                        e('div', { className:'nav-item'+(page==='stock'?' active':''), onClick:()=>setPage('stock') }, e('i',{className:'ti ti-barcode'}), 'Stock Inquiry'),
+                        e('div', { className:'nav-item'+(page==='grn'?' active':''), onClick:()=>{ setPage('grn'); setSidebarOpen(false); } }, e('i',{className:'ti ti-package'}), 'Goods Receipt (GRN)'),
+                        e('div', { className:'nav-item'+(page==='gdn'?' active':''), onClick:()=>{ setPage('gdn'); setSidebarOpen(false); } }, e('i',{className:'ti ti-truck-delivery'}), 'Goods Delivery (GDN)'),
+                        e('div', { className:'nav-item'+(page==='stock'?' active':''), onClick:()=>{ setPage('stock'); setSidebarOpen(false); } }, e('i',{className:'ti ti-barcode'}), 'Stock Inquiry'),
                         e('div', { className:'nav-label' }, 'Analysis'),
-                        e('div', { className:'nav-item'+(page==='reports'?' active':''), onClick:()=>setPage('reports') }, e('i',{className:'ti ti-report-analytics'}), 'Reports')
+                        e('div', { className:'nav-item'+(page==='reports'?' active':''), onClick:()=>{ setPage('reports'); setSidebarOpen(false); } }, e('i',{className:'ti ti-report-analytics'}), 'Reports')
                     ),e('div', {
                         className:'nav-item'+(page==='backup'?' active':''),
-                        onClick:()=>setPage('backup')
+                        onClick:()=>{ setPage('backup'); setSidebarOpen(false); }
                     },
                         e('i',{className:'ti ti-archive'}),
                         'Backup'
@@ -662,6 +748,7 @@
         function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal }) {
             const [view, setView] = useState('list');
             const [selectedGrn, setSelectedGrn] = useState(null);
+            const [editForm, setEditForm] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [form, setForm] = useState({
                 pNumber:'', pName:'', pLocation:'',
@@ -721,6 +808,34 @@
                 const matchedLpo = lpos.find(l=>l.number.toUpperCase()===val.toUpperCase() && (!matchedPrj||l.projectId===matchedPrj.id));
                 setForm(prev => matchedLpo ? { ...prev, lNumber:val, lSupplier:matchedLpo.supplier, lAddress:matchedLpo.address||'' } : { ...prev, lNumber:val });
             };
+            const handleStartEdit = (grn) => {
+            const lpo = lpos.find(l => l.id === grn.lpoId);
+            const prj = projects.find(p => p.id === lpo?.projectId);
+            const items = grnItems.filter(i => i.grnId === grn.id);
+
+            setEditForm({
+                grnId: grn.id,
+                gDate: grn.date,
+                gRemarks: grn.remarks || '',
+                pName: prj?.name || '',
+                pLocation: prj?.location || '',
+                lSupplier: lpo?.supplier || '',
+                lAddress: lpo?.address || '',
+                prjId: prj?.id,
+                lpoId: lpo?.id,
+                items: items.map(i => ({
+                    id: i.id,
+                    productCode: i.productCode,
+                    oemCode: i.oemCode || '',
+                    description: i.description || '',
+                    unit: i.unit || 'Pcs',
+                    qty: String(i.qty),
+                    unitPrice: String(i.unitPrice)
+                }))
+            });
+
+            setView('edit');
+        };
 
             return e('div', null,
                 e('div', { className:'card' },
@@ -760,10 +875,15 @@
                                         e('td', null, g.lpo?.supplier || 'N/A'),
                                         e('td', { style:{ textAlign:'right', fontWeight:600 } }, '$'+g.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})),
                                         e('td', { style:{ textAlign:'right', paddingRight:'20px' } },
+                                        e('div', { style:{ display:'flex', justifyContent:'flex-end', gap:'4px' } },
                                             e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#185FA5' },
                                                 onClick:(ev)=>{ ev.stopPropagation(); setSelectedGrn(grns.find(x=>x.id===g.id)); setView('detail'); }
-                                            }, e('i', { className:'ti ti-eye', style:{ fontSize:'18px' } }))
+                                            }, e('i', { className:'ti ti-eye', style:{ fontSize:'18px' } })),
+                                            e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#F59E0B' },
+                                                onClick:(ev)=>{ ev.stopPropagation(); handleStartEdit(grns.find(x=>x.id===g.id)); }
+                                            }, e('i', { className:'ti ti-pencil', style:{ fontSize:'18px' } }))
                                         )
+                                    )
                                     ))
                             )
                         )
@@ -959,6 +1079,86 @@
                         e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'20px'},className:'no-print'},
                             e('button',{className:'btn btn-primary',onClick:()=>{setView('list');setSelectedGrn(null);}},'Close Details')
                         )
+                    ) : view === 'edit' && editForm ? e('div', null,
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-building'}), 'Project Details'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'Project Name'), e('input',{ value:editForm.pName, onChange:x=>setEditForm({...editForm,pName:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Project Location'), e('input',{ value:editForm.pLocation, onChange:x=>setEditForm({...editForm,pLocation:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-file-invoice'}), 'LPO Details'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e('input',{ value:editForm.lSupplier, onChange:x=>setEditForm({...editForm,lSupplier:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Supplier Address'), e('input',{ value:editForm.lAddress, onChange:x=>setEditForm({...editForm,lAddress:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-package'}), 'GRN Header'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'Receipt Date'), e('input',{ type:'date', value:editForm.gDate, onChange:x=>setEditForm({...editForm,gDate:x.target.value}) })),
+                                e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Remarks'), e('input',{ value:editForm.gRemarks, onChange:x=>setEditForm({...editForm,gRemarks:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-list'}), 'Product Items'),
+                            e('table', null,
+                                e('thead', null, e('tr', null,
+                                    e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
+                                    e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Quantity'),
+                                    e('th',{style:{textAlign:'right'}},'Unit Price'), e('th',{style:{textAlign:'right'}},'Total Price'), e('th',null,'')
+                                )),
+                                e('tbody', null, editForm.items.map((it,idx) => {
+                                    const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
+                                    return e('tr',{key:idx},
+                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{type:'number',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qty=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{type:'number',value:it.unitPrice,style:{width:70,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].unitPrice=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',{style:{verticalAlign:'middle',fontWeight:600,minWidth:80,textAlign:'right'}},'$'+(qty*price).toFixed(2)),
+                                        e('td',null,e('button',{className:'btn',style:{color:'#D85A30',padding:'4px 8px'},onClick:()=>setEditForm({...editForm,items:editForm.items.filter((_,i)=>i!==idx)})},e('i',{className:'ti ti-trash'})))
+                                    );
+                                }))
+                            ),
+                            e('button',{className:'btn',style:{marginTop:12},onClick:()=>setEditForm({...editForm,items:[...editForm.items,{productCode:'',oemCode:'',description:'',unit:'Pcs',qty:'',unitPrice:''}]})},'+ Add Line')
+                        ),
+                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
+                            e('button',{className:'btn',onClick:()=>{setEditForm(null);setView('list');}},'Discard'),
+                            e('button',{className:'btn btn-primary',onClick: async () => {
+                                if(!editForm.items.length) return alert('Add at least one item');
+                                // Update project
+                                await db.from('projects').update({ name:editForm.pName, location:editForm.pLocation }).eq('id',editForm.prjId);
+                                // Update LPO
+                                await db.from('lpos').update({ supplier:editForm.lSupplier, address:editForm.lAddress }).eq('id',editForm.lpoId);
+                                // Update GRN header
+                                await db.from('grns').update({ date:editForm.gDate, remarks:editForm.gRemarks }).eq('id',editForm.grnId);
+                                // Delete old items and re-insert
+                                await db.from('grn_items').delete().eq('grn_id', editForm.grnId);
+                                const validItems = editForm.items.filter(it=>it.productCode&&it.qty);
+                                const itemsToInsert = validItems.map(it=>({
+                                    grn_id: editForm.grnId,
+                                    product_code: it.productCode,
+                                    oem_code: it.oemCode,
+                                    description: it.description,
+                                    unit: it.unit||'Pcs',
+                                    qty: parseFloat(it.qty),
+                                    unit_price: parseFloat(it.unitPrice)||0,
+                                    total_price: (parseFloat(it.qty)||0)*(parseFloat(it.unitPrice)||0)
+                                }));
+                                const { data:newItems, error } = await db.from('grn_items').insert(itemsToInsert).select();
+                                if(error) return alert('Error saving: '+error.message);
+                                // Update local state
+                                setProjects(prev=>prev.map(p=>p.id===editForm.prjId?{...p,name:editForm.pName,location:editForm.pLocation}:p));
+                                setLpos(prev=>prev.map(l=>l.id===editForm.lpoId?{...l,supplier:editForm.lSupplier,address:editForm.lAddress}:l));
+                                setGrns(prev=>prev.map(g=>g.id===editForm.grnId?{...g,date:editForm.gDate,remarks:editForm.gRemarks}:g));
+                                setGrnItems(prev=>[...prev.filter(i=>i.grnId!==editForm.grnId),...newItems.map(toCamel)]);
+                                setEditForm(null);
+                                setView('list');
+                            }},'Save Changes')
+                        )
                     ) : null
                 )
             );
@@ -968,6 +1168,7 @@
         function GDNPage({ projects, lpos, grns, gdns, setGdns, grnItems, gdnItems, setGdnItems, calcStock, triggerEmailModal }) {
             const [view, setView] = useState('list');
             const [selectedGdn, setSelectedGdn] = useState(null);
+            const [editForm, setEditForm] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [selProject, setSelProject] = useState('');
             const [selLpo, setSelLpo] = useState('');
@@ -1032,6 +1233,30 @@
                     `${gdn.number.toLowerCase()}_delivery.pdf`, 'pdf'
                 );
             };
+            const handleStartEditGdn = (gdn) => {
+            const lpo = lpos.find(l => l.id === gdn.lpoId);
+            const prj = projects.find(p => p.id === lpo?.projectId);
+            const items = gdnItems.filter(i => i.gdnId === gdn.id);
+            setEditForm({
+                gdnId: gdn.id,
+                gDate: gdn.date,
+                consigneeName: gdn.consigneeName || '',
+                consigneeAddress: gdn.consigneeAddress || '',
+                prjId: prj?.id,
+                lpoId: lpo?.id,
+                lpoNumber: lpo?.number || '',
+                prjNumber: prj?.number || '',
+                items: items.map(i => ({
+                    id: i.id,
+                    productCode: i.productCode,
+                    oemCode: i.oemCode || '',
+                    description: i.description || '',
+                    unit: i.unit || 'Pcs',
+                    qtyDelivered: String(i.qtyDelivered)
+                }))
+            });
+            setView('edit');
+        };
 
             const getProductDetails = (productCode) => {
                 const item = grnItems.find(i=>i.productCode===productCode);
@@ -1073,9 +1298,14 @@
                                         e('td', null, d.lpo?.number||'N/A'),
                                         e('td', null, d.consigneeName),
                                         e('td', { style:{ textAlign:'right', paddingRight:'20px' } },
-                                            e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#1D9E75' },
-                                                onClick:(ev)=>{ ev.stopPropagation(); setSelectedGdn(gdns.find(x=>x.id===d.id)); setView('detail'); }
-                                            }, e('i',{className:'ti ti-eye',style:{fontSize:'18px'}}))
+                                            e('div', { style:{ display:'flex', justifyContent:'flex-end', gap:'4px' } },
+                                                e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#1D9E75' },
+                                                    onClick:(ev)=>{ ev.stopPropagation(); setSelectedGdn(gdns.find(x=>x.id===d.id)); setView('detail'); }
+                                                }, e('i',{className:'ti ti-eye',style:{fontSize:'18px'}})),
+                                                e('button', { className:'btn', style:{ border:'none', background:'transparent', padding:'4px', cursor:'pointer', color:'#F59E0B' },
+                                                    onClick:(ev)=>{ ev.stopPropagation(); handleStartEditGdn(gdns.find(x=>x.id===d.id)); }
+                                                }, e('i',{className:'ti ti-pencil',style:{fontSize:'18px'}}))
+                                            )
                                         )
                                     ))
                             )
@@ -1245,6 +1475,65 @@
                         ),
                         e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'20px'},className:'no-print'},
                             e('button',{className:'btn btn-primary',onClick:()=>{setView('list');setSelectedGdn(null);}},'Close Details')
+                        )
+                    ) : view === 'edit' && editForm ? e('div', null,
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-package'}), 'GDN Header'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'GDN Date'), e('input',{ type:'date', value:editForm.gDate, onChange:x=>setEditForm({...editForm,gDate:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Project Number'), e('input',{ value:editForm.prjNumber, readOnly:true, style:{background:'#f0f0f0',color:'#666'} })),
+                                e('div',{className:'form-group'}, e('label',null,'LPO Number'), e('input',{ value:editForm.lpoNumber, readOnly:true, style:{background:'#f0f0f0',color:'#666'} }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-user'}), 'Consignee Details'),
+                            e('div', { className:'form-grid' },
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Name'), e('input',{ value:editForm.consigneeName, onChange:x=>setEditForm({...editForm,consigneeName:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Address'), e('input',{ value:editForm.consigneeAddress, onChange:x=>setEditForm({...editForm,consigneeAddress:x.target.value}) }))
+                            )
+                        ),
+                        e('div', { className:'form-section' },
+                            e('div', { className:'form-section-title' }, e('i',{className:'ti ti-list'}), 'Delivered Items'),
+                            e('table', null,
+                                e('thead', null, e('tr', null,
+                                    e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
+                                    e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Qty Delivered'), e('th',null,'')
+                                )),
+                                e('tbody', null, editForm.items.map((it,idx) =>
+                                    e('tr',{key:idx},
+                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('input',{type:'number',value:it.qtyDelivered,style:{width:80,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qtyDelivered=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e('button',{className:'btn',style:{color:'#D85A30',padding:'4px 8px'},onClick:()=>setEditForm({...editForm,items:editForm.items.filter((_,i)=>i!==idx)})},e('i',{className:'ti ti-trash'})))
+                                    )
+                                ))
+                            ),
+                            e('button',{className:'btn',style:{marginTop:12},onClick:()=>setEditForm({...editForm,items:[...editForm.items,{productCode:'',oemCode:'',description:'',unit:'Pcs',qtyDelivered:''}]})},'+ Add Line')
+                        ),
+                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
+                            e('button',{className:'btn',onClick:()=>{setEditForm(null);setView('list');}},'Discard'),
+                            e('button',{className:'btn btn-primary',onClick: async () => {
+                                if(!editForm.items.length) return alert('Add at least one item');
+                                await db.from('gdns').update({ date:editForm.gDate, consignee_name:editForm.consigneeName, consignee_address:editForm.consigneeAddress }).eq('id',editForm.gdnId);
+                                await db.from('gdn_items').delete().eq('gdn_id', editForm.gdnId);
+                                const validItems = editForm.items.filter(it=>it.productCode&&it.qtyDelivered);
+                                const itemsToInsert = validItems.map(it=>({
+                                    gdn_id: editForm.gdnId,
+                                    product_code: it.productCode,
+                                    oem_code: it.oemCode,
+                                    description: it.description,
+                                    unit: it.unit||'Pcs',
+                                    qty_delivered: parseFloat(it.qtyDelivered)
+                                }));
+                                const { data:newItems, error } = await db.from('gdn_items').insert(itemsToInsert).select();
+                                if(error) return alert('Error saving: '+error.message);
+                                setGdns(prev=>prev.map(d=>d.id===editForm.gdnId?{...d,date:editForm.gDate,consigneeName:editForm.consigneeName,consigneeAddress:editForm.consigneeAddress}:d));
+                                setGdnItems(prev=>[...prev.filter(i=>i.gdnId!==editForm.gdnId),...newItems.map(toCamel)]);
+                                setEditForm(null);
+                                setView('list');
+                            }},'Save Changes')
                         )
                     ) : null
                 )
