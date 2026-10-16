@@ -817,10 +817,17 @@
             return prepareScanImage(file, mimeType);
         }
 
+        const SCAN_TIMEOUT_MS = 120000;
+
         async function extractReceiptFromFiles(files) {
             const prepared = [];
             for (const f of files) prepared.push(await prepareScanFile(f));
-            const { data, error } = await db.functions.invoke('gemini-extract', { body: { files: prepared } });
+            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(
+                'The AI service did not respond within 2 minutes.')), SCAN_TIMEOUT_MS));
+            const { data, error } = await Promise.race([
+                db.functions.invoke('gemini-extract', { body: { files: prepared } }),
+                timeout
+            ]);
             if (error) {
                 let msg = error.message || 'Extraction failed';
                 try { const b = await error.context.json(); if (b && b.error) msg = b.error; } catch {}
@@ -895,7 +902,24 @@
             const [status, setStatus] = useState('idle');
             const [message, setMessage] = useState('');
             const [result, setResult] = useState(null);
+            const [elapsed, setElapsed] = useState(0);
             const inputRef = useRef(null);
+            const runId = useRef(0);
+
+            useEffect(() => {
+                if (status !== 'working') return;
+                const started = Date.now();
+                setElapsed(0);
+                const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+                return () => clearInterval(t);
+            }, [status]);
+
+            useEffect(() => () => { runId.current++; }, []);
+
+            const cancel = () => {
+                runId.current++;
+                setStatus('error'); setMessage('Scan cancelled.');
+            };
 
             const pick = (list) => {
                 const arr = Array.from(list || []);
@@ -907,13 +931,16 @@
 
             const run = async () => {
                 if (!files.length) return;
+                const id = ++runId.current;
                 setStatus('working'); setMessage(''); setResult(null);
                 try {
                     const data = await extractReceiptFromFiles(files);
+                    if (id !== runId.current) return;
                     const summary = onExtracted(data);
                     setResult({ ...summary, warnings: data.warnings || [], uncertain: data.uncertainFields || [] });
                     setStatus('done');
                 } catch (err) {
+                    if (id !== runId.current) return;
                     setStatus('error');
                     setMessage((err && err.message) || 'Extraction failed. Please fill the form manually.');
                 }
@@ -928,8 +955,11 @@
                     e('button', { className:'btn', disabled:status==='working', onClick:()=>inputRef.current && inputRef.current.click() }, e('i',{className:'ti ti-upload'}), files.length ? 'Change File(s)' : 'Choose File(s)'),
                     files.length > 0 && e('span', { style:{ fontSize:'12px', color:'#444' } }, files.map(f=>f.name).join(', ')),
                     e('button', { className:'btn btn-primary', disabled:!files.length || status==='working', onClick:run },
-                        e('i',{className: status==='working' ? 'ti ti-loader-2' : 'ti ti-sparkles'}), status==='working' ? 'Reading document…' : 'Extract Details')
+                        e('i',{className: status==='working' ? 'ti ti-loader-2' : 'ti ti-sparkles'}), status==='working' ? `Reading document… ${elapsed}s` : 'Extract Details'),
+                    status==='working' && e('button', { className:'btn', onClick:cancel }, 'Cancel')
                 ),
+                status === 'working' && elapsed >= 20 && e('div', { style:{ marginTop:'8px', fontSize:'12px', color:'#666' } },
+                    'Large or multi-page scans can take up to a minute on the free tier…'),
                 status === 'error' && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FCEBE5', color:'#8A2E12', fontSize:'13px' } },
                     e('i',{className:'ti ti-alert-circle',style:{marginRight:'6px'}}), message, ' You can continue filling the form manually.'),
                 status === 'done' && result && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FAEEDA', color:'#633806', fontSize:'13px', lineHeight:1.5 } },
@@ -942,7 +972,7 @@
         }
 
         // ─── GRN Page ───────────────────────────────────────────────────────────
-        function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal }) {
+        function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal, session }) {
             const [view, setView] = useState('list');
             const [selectedGrn, setSelectedGrn] = useState(null);
             const [editForm, setEditForm] = useState(null);

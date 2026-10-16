@@ -27,7 +27,9 @@ const ALLOWED_MIME = new Set([
 ]);
 const MAX_FILES = 5;
 const MAX_BASE64_CHARS = 18_000_000; // Gemini caps inline request payloads at ~20 MB
-const DEADLINE_MS = 140_000; // stay under the Edge Function wall-clock limit
+const DEADLINE_MS = 110_000; // stay well under the Edge Function wall-clock limit
+const ATTEMPT_MS = 50_000; // a model slower than this is abandoned for the next one
+const THINKING_BUDGET = 1024; // cap "thinking" tokens: OCR needs little reasoning and it adds latency
 const DEFAULT_MODELS = "gemini-flash-latest,gemini-2.5-flash,gemini-flash-lite-latest";
 
 const json = (status: number, body: unknown) =>
@@ -39,7 +41,7 @@ class ModelError extends Error {
   }
 }
 
-async function callGemini(model: string, apiKey: string, parts: unknown[], timeoutMs: number) {
+async function callGemini(model: string, apiKey: string, parts: unknown[], timeoutMs: number, thinking = true) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -54,6 +56,7 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], timeo
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           maxOutputTokens: 16384,
+          ...(thinking ? { thinkingConfig: { thinkingBudget: THINKING_BUDGET } } : {}),
         },
       }),
     },
@@ -61,6 +64,10 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], timeo
 
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);
+    // Some models reject thinkingConfig; retry once without it.
+    if (res.status === 400 && thinking && /thinking/i.test(detail)) {
+      return callGemini(model, apiKey, parts, timeoutMs, false);
+    }
     // 404: model renamed/retired, 429: free-tier quota, 5xx: overloaded -> try the next model
     const retryable = res.status === 404 || res.status === 429 || res.status >= 500;
     throw new ModelError(`${model}: HTTP ${res.status} ${detail}`, retryable);
@@ -126,11 +133,14 @@ Deno.serve(async (req) => {
   for (const model of models) {
     const remaining = DEADLINE_MS - (Date.now() - started);
     if (remaining < 10_000) break;
+    const attemptStart = Date.now();
     try {
-      const data = await callGemini(model, apiKey, parts, remaining);
+      const data = await callGemini(model, apiKey, parts, Math.min(remaining, ATTEMPT_MS));
+      console.log(`gemini-extract: ${model} ok in ${Date.now() - attemptStart} ms`);
       return json(200, { data, model });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+      const msg = timedOut ? `${model}: timed out after ${Date.now() - attemptStart} ms` : err instanceof Error ? err.message : String(err);
       errors.push(msg);
       console.error("gemini-extract:", msg);
       if (err instanceof ModelError && !err.retryable) break;
@@ -138,9 +148,12 @@ Deno.serve(async (req) => {
   }
 
   const quota = errors.some((e) => e.includes("HTTP 429"));
+  const slow = errors.length > 0 && errors.every((e) => e.includes("timed out"));
   return json(502, {
     error: quota
       ? "The free AI quota is used up for now. Try again in a minute, or fill the form manually."
+      : slow
+      ? "The AI service is too slow right now. Try again, upload fewer pages, or fill the form manually."
       : "Could not read the document. Try a clearer photo, or fill the form manually.",
     details: errors,
   });
