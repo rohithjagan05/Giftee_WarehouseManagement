@@ -752,12 +752,203 @@
             );
         }
 
+        // ─── AI Receipt Scan (Supabase Edge Function "gemini-extract") ──────────
+        const SCAN_MAX_FILES = 5;
+        const SCAN_MAX_BYTES = 13 * 1024 * 1024;
+        const SCAN_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif';
+
+        const readAsBase64 = (blob) => new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(',')[1] || '');
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+        });
+
+        const fileMime = (file) => {
+            if (file.type) return file.type === 'image/jpg' ? 'image/jpeg' : file.type;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            return { pdf:'application/pdf', heic:'image/heic', heif:'image/heif', jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', webp:'image/webp' }[ext] || '';
+        };
+
+        // Upright, resized, grayscale, contrast-stretched JPEG — helps faint, noisy or tiny scans.
+        // Falls back to the original bytes when the browser cannot decode the image (e.g. HEIC).
+        async function prepareScanImage(file, mimeType) {
+            let bmp;
+            try { bmp = await createImageBitmap(file, { imageOrientation:'from-image' }); }
+            catch { return { mimeType, data: await readAsBase64(file) }; }
+            const long = Math.max(bmp.width, bmp.height);
+            const target = long > 2400 ? 2400 : long < 1600 ? Math.min(1600, long * 2) : long;
+            const scale = target / long;
+            const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d', { willReadFrequently:true });
+            ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(bmp, 0, 0, w, h);
+            bmp.close && bmp.close();
+
+            const img = ctx.getImageData(0, 0, w, h), px = img.data, hist = new Uint32Array(256);
+            for (let i = 0; i < px.length; i += 4) {
+                const y = (px[i] * 299 + px[i+1] * 587 + px[i+2] * 114) / 1000 | 0;
+                px[i] = y; hist[y]++;
+            }
+            // Auto-levels: map the 1st..99th luminance percentiles to the full 0..255 range.
+            const total = w * h; let acc = 0, lo = 0, hi = 255;
+            for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= total * 0.01) { lo = v; break; } }
+            acc = 0;
+            for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= total * 0.01) { hi = v; break; } }
+            const range = Math.max(hi - lo, 32);
+            for (let i = 0; i < px.length; i += 4) {
+                const v = Math.max(0, Math.min(255, (px[i] - lo) * 255 / range));
+                px[i] = px[i+1] = px[i+2] = v;
+            }
+            ctx.putImageData(img, 0, 0);
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+            return { mimeType:'image/jpeg', data: await readAsBase64(blob) };
+        }
+
+        async function prepareScanFile(file) {
+            const mimeType = fileMime(file);
+            if (mimeType === 'application/pdf' || mimeType === 'image/heic' || mimeType === 'image/heif') {
+                return { mimeType, data: await readAsBase64(file) };
+            }
+            if (!mimeType.startsWith('image/')) throw new Error(`${file.name}: unsupported file type. Use JPG, PNG, WEBP, HEIC or PDF.`);
+            return prepareScanImage(file, mimeType);
+        }
+
+        async function extractReceiptFromFiles(files) {
+            const prepared = [];
+            for (const f of files) prepared.push(await prepareScanFile(f));
+            const { data, error } = await db.functions.invoke('gemini-extract', { body: { files: prepared } });
+            if (error) {
+                let msg = error.message || 'Extraction failed';
+                try { const b = await error.context.json(); if (b && b.error) msg = b.error; } catch {}
+                throw new Error(msg);
+            }
+            if (!data || !data.data || typeof data.data !== 'object') throw new Error('The AI service returned an unexpected response.');
+            return data.data;
+        }
+
+        const scanKey = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const scanStr = (v) => (v === null || v === undefined) ? '' : String(v).trim();
+        const scanNum = (v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? String(n) : ''; };
+
+        // Maps extracted data onto the GRN create-form state. Existing project/LPO master data wins
+        // over OCR text when the number matches, exactly like typing the number manually.
+        // The GRN number is never touched; fields the AI could not read keep their current value.
+        function applyExtractionToForm(form, x, projects, lpos) {
+            const next = { ...form };
+            const filled = [];
+            const set = (key, val, label) => { const v = scanStr(val); if (v) { next[key] = v; filled.push(label); } };
+
+            const xLpoKey = scanKey(x.lpoNumber);
+            let prj = x.projectNumber ? projects.find(p => scanKey(p.number) === scanKey(x.projectNumber)) : null;
+            let lpo = xLpoKey ? lpos.find(l => scanKey(l.number) === xLpoKey && (!prj || l.projectId === prj.id)) : null;
+            if (!prj && lpo && !x.projectNumber) {
+                const sameNumber = lpos.filter(l => scanKey(l.number) === xLpoKey);
+                if (sameNumber.length === 1) prj = projects.find(p => p.id === lpo.projectId) || null;
+                else lpo = null;
+            }
+
+            if (prj) {
+                next.pNumber = prj.number; next.pName = prj.name || next.pName; next.pLocation = prj.location || next.pLocation;
+                filled.push('Project (matched existing ' + prj.number + ')');
+            } else {
+                set('pNumber', x.projectNumber, 'Project Number');
+                set('pName', x.projectName, 'Project Name');
+                set('pLocation', x.projectLocation, 'Project Location');
+            }
+
+            if (lpo) {
+                next.lNumber = lpo.number; next.lSupplier = lpo.supplier || next.lSupplier; next.lAddress = lpo.address || next.lAddress;
+                filled.push('LPO (matched existing ' + lpo.number + ')');
+            } else {
+                set('lNumber', x.lpoNumber, 'LPO Number');
+                set('lSupplier', x.supplierName, 'Supplier Name');
+                set('lAddress', x.supplierAddress, 'Supplier Address');
+            }
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(scanStr(x.receiptDate))) { next.gDate = x.receiptDate; filled.push('Receipt Date'); }
+
+            if (!scanStr(form.gRemarks)) {
+                const ref = [scanStr(x.documentType), scanStr(x.documentNumber)].filter(Boolean).join(' ');
+                const remarks = [ref && ('Ref: ' + ref), scanStr(x.remarks)].filter(Boolean).join(' · ');
+                if (remarks) { next.gRemarks = remarks; filled.push('Remarks'); }
+            }
+
+            const extractedItems = (Array.isArray(x.items) ? x.items : []).map(it => ({
+                productCode: scanStr(it.productCode), oemCode: scanStr(it.oemCode), description: scanStr(it.description),
+                unit: scanStr(it.unit) || 'Pcs', qty: scanNum(it.qty), unitPrice: scanNum(it.unitPrice), _ai: true
+            })).filter(it => it.productCode || it.oemCode || it.description);
+            if (extractedItems.length) {
+                // Keep lines the user typed by hand; replace blank lines and lines from a previous scan.
+                const manual = form.items.filter(it => !it._ai && (it.productCode || it.oemCode || it.description || it.qty || it.unitPrice));
+                next.items = [...manual, ...extractedItems];
+            }
+
+            return { form: next, filled, itemCount: extractedItems.length };
+        }
+
+        function ReceiptScanner({ onExtracted }) {
+            const [files, setFiles] = useState([]);
+            const [status, setStatus] = useState('idle');
+            const [message, setMessage] = useState('');
+            const [result, setResult] = useState(null);
+            const inputRef = useRef(null);
+
+            const pick = (list) => {
+                const arr = Array.from(list || []);
+                const size = arr.reduce((s, f) => s + f.size, 0);
+                if (arr.length > SCAN_MAX_FILES) { setStatus('error'); setMessage(`Select at most ${SCAN_MAX_FILES} files (pages).`); return; }
+                if (size > SCAN_MAX_BYTES) { setStatus('error'); setMessage('Files are too large (max ~13 MB in total).'); return; }
+                setFiles(arr); setStatus('idle'); setMessage('');
+            };
+
+            const run = async () => {
+                if (!files.length) return;
+                setStatus('working'); setMessage(''); setResult(null);
+                try {
+                    const data = await extractReceiptFromFiles(files);
+                    const summary = onExtracted(data);
+                    setResult({ ...summary, warnings: data.warnings || [], uncertain: data.uncertainFields || [] });
+                    setStatus('done');
+                } catch (err) {
+                    setStatus('error');
+                    setMessage((err && err.message) || 'Extraction failed. Please fill the form manually.');
+                }
+            };
+
+            return e('div', { className:'form-section no-print', style:{ borderStyle:'dashed', borderColor:'#85B7EB', background:'#F4F8FD' } },
+                e('div', { className:'form-section-title' }, e('i',{className:'ti ti-scan'}), 'Scan Receipt with AI (optional)'),
+                e('div', { style:{ fontSize:'12px', color:'#666', marginBottom:'10px' } },
+                    'Upload a photo, scan or PDF of the delivery note / invoice / LPO (up to 5 pages). The form below will be pre-filled — or skip this and type the details manually.'),
+                e('div', { style:{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' } },
+                    e('input', { ref:inputRef, type:'file', accept:SCAN_ACCEPT, multiple:true, style:{ display:'none' }, onChange:x=>{ pick(x.target.files); x.target.value=''; } }),
+                    e('button', { className:'btn', disabled:status==='working', onClick:()=>inputRef.current && inputRef.current.click() }, e('i',{className:'ti ti-upload'}), files.length ? 'Change File(s)' : 'Choose File(s)'),
+                    files.length > 0 && e('span', { style:{ fontSize:'12px', color:'#444' } }, files.map(f=>f.name).join(', ')),
+                    e('button', { className:'btn btn-primary', disabled:!files.length || status==='working', onClick:run },
+                        e('i',{className: status==='working' ? 'ti ti-loader-2' : 'ti ti-sparkles'}), status==='working' ? 'Reading document…' : 'Extract Details')
+                ),
+                status === 'error' && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FCEBE5', color:'#8A2E12', fontSize:'13px' } },
+                    e('i',{className:'ti ti-alert-circle',style:{marginRight:'6px'}}), message, ' You can continue filling the form manually.'),
+                status === 'done' && result && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FAEEDA', color:'#633806', fontSize:'13px', lineHeight:1.5 } },
+                    e('div', { style:{ fontWeight:600 } }, e('i',{className:'ti ti-alert-triangle',style:{marginRight:'6px'}}), 'AI-extracted — review every field below before confirming. Nothing has been saved yet.'),
+                    e('div', null, 'Filled: ', result.filled.length ? result.filled.join(', ') : 'no header fields', ` · ${result.itemCount} item line(s).`),
+                    result.uncertain.length > 0 && e('div', null, 'Low confidence: ', result.uncertain.join(', ')),
+                    result.warnings.length > 0 && e('ul', { style:{ margin:'4px 0 0 18px' } }, result.warnings.map((w,i)=>e('li',{key:i},w)))
+                )
+            );
+        }
+
         // ─── GRN Page ───────────────────────────────────────────────────────────
         function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal }) {
             const [view, setView] = useState('list');
             const [selectedGrn, setSelectedGrn] = useState(null);
             const [editForm, setEditForm] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
+            const [aiFilled, setAiFilled] = useState(false);
+            const [aiVerified, setAiVerified] = useState(false);
             const [form, setForm] = useState({
                 pNumber:'', pName:'', pLocation:'',
                 lNumber:'', lSupplier:'', lAddress:'',
@@ -791,7 +982,15 @@
             const handleStartCreate = () => {
                 const nextGrnNumber = generateNextGRNNumber(grns);
                 setForm({ pNumber:'', pName:'', pLocation:'', lNumber:'', lSupplier:'', lAddress:'', gNumber:nextGrnNumber, gDate:new Date().toISOString().split('T')[0], gRemarks:'', items:[{ productCode:'', oemCode:'', description:'', unit:'Pcs', qty:'', unitPrice:'' }] });
+                setAiFilled(false); setAiVerified(false);
                 setView('create');
+            };
+
+            const handleExtracted = (data) => {
+                const res = applyExtractionToForm(form, data, projects, lpos);
+                setForm(res.form);
+                setAiFilled(true); setAiVerified(false);
+                return res;
             };
 
             const handleSendGrn = (grn) => {
@@ -899,6 +1098,7 @@
 
                     // ── CREATE VIEW ──
                     : view === 'create' ? e('div', null,
+                        e(ReceiptScanner, { onExtracted: handleExtracted }),
                         e('div', { className:'form-section' },
                             e('div', { className:'form-section-title' }, e('i',{className:'ti ti-building'}), '1. Project Details'),
                             e('div', { className:'form-grid' },
@@ -947,9 +1147,13 @@
                             ),
                             e('button',{className:'btn no-print',style:{marginTop:12},onClick:()=>setForm({...form,items:[...form.items,{productCode:'',oemCode:'',description:'',unit:'Pcs',qty:'',unitPrice:''}]})},'+ Add Line')
                         ),
-                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
+                        e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',alignItems:'center',flexWrap:'wrap',marginTop:16}},
+                            aiFilled && e('label',{style:{display:'flex',alignItems:'center',gap:6,fontSize:13,marginRight:'auto',cursor:'pointer'}},
+                                e('input',{type:'checkbox',checked:aiVerified,onChange:x=>setAiVerified(x.target.checked)}),
+                                'I have checked the AI-extracted details against the document'),
                             e('button',{className:'btn',onClick:()=>setView('list')},'Discard'),
                             e('button',{className:'btn btn-primary',onClick: async () => {
+                                        if (aiFilled && !aiVerified) return alert('Please review the AI-extracted details and tick the confirmation box before saving.');
                                         if (!form.pNumber || !form.lNumber || !form.gNumber) return alert('Fill required fields');
 
                                         // 1. Project — upsert
