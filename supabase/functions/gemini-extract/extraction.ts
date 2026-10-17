@@ -15,9 +15,21 @@ Field rules:
 - supplierName / supplierAddress: the company that ISSUED the document and is SUPPLYING the goods
   (usually the letterhead, logo or "From" block). Never use the buyer / "Bill To" / "Ship To" / consignee.
 - lpoNumber: the buyer's purchase order reference. Labels include "LPO No", "L.P.O", "PO No", "P.O. #",
-  "Purchase Order", "Customer PO", "Your Ref", "Order Ref". It is NOT the invoice / delivery note number.
-- projectNumber / projectName / projectLocation: labels include "Project", "Project No", "Job No", "Site",
-  "Project Ref", "Delivery Location". Leave empty if not printed.
+  "Purchase Order", "Order No", "Customer PO", "Customer Order", "Your Ref", "Your Reference", "Order Ref".
+  It is NOT the invoice / delivery note number and NOT the supplier's own "Our Reference".
+  If no such reference is printed, leave it empty (it will be listed in otherReferences instead).
+- projectNumber: the project's code / number. Labels include "Project No", "Project Number", "Project Code",
+  "Project Reference", "Project Ref", "Job No", "Job Code", "WBS", "Cost Centre". Prefer a code-like value
+  (e.g. "6305PHP035.03") over a name. If the only project field holds a short code-like name
+  (e.g. "Dewa J04-MRTC") and nothing else qualifies, use it.
+- projectName: the project's descriptive name, from a "Project" / "Project Name" / "Job" / "Site" field
+  (e.g. "Dewa J04-MRTC"). It may equal a reference like "Our Reference" when that clearly names the project.
+- projectLocation: the site the goods are delivered to: "Site", "Project Location", "Delivery Address",
+  "Delivery Location", "Ship To" site. Give a short form such as "Dewa MRTC Station, Jebel Ali, Dubai"
+  (site name + area + city), not the buyer's office/billing address.
+- otherReferences: EVERY other reference-like number or code printed on the document that you did not use
+  above, with its printed label, e.g. {"label":"Our Reference","value":"DEWA FA J04 - MRTC"}. Include
+  invoice/delivery note numbers, customer/supplier references, quotation, contract and project references.
 - documentNumber / documentType: the document's own number and type (e.g. "DN-10234", "Delivery Note").
 - receiptDate: the delivery / document date as YYYY-MM-DD. UAE documents are day-first:
   "05/06/2024" means 5 June 2024 unless the day part is clearly impossible.
@@ -66,6 +78,14 @@ export const RESPONSE_SCHEMA = {
     receiptDate: str("Document / delivery date as YYYY-MM-DD"),
     currency: str("ISO currency code if shown, e.g. AED, USD"),
     remarks: str("Short notes printed on the document"),
+    otherReferences: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { label: str("Label as printed"), value: str("Value exactly as printed") },
+        required: ["label", "value"],
+      },
+    },
     items: {
       type: "ARRAY",
       items: {
@@ -90,7 +110,7 @@ export const RESPONSE_SCHEMA = {
   propertyOrdering: [
     "documentType", "documentNumber", "projectNumber", "projectName", "projectLocation",
     "lpoNumber", "supplierName", "supplierAddress", "receiptDate", "currency", "remarks",
-    "items", "uncertainFields", "warnings",
+    "otherReferences", "items", "uncertainFields", "warnings",
   ],
 };
 
@@ -116,6 +136,7 @@ export interface Extraction {
   receiptDate: string;
   currency: string;
   remarks: string;
+  otherReferences: { label: string; value: string }[];
   items: ExtractedItem[];
   uncertainFields: string[];
   warnings: string[];
@@ -280,6 +301,14 @@ export function normalizeExtraction(input: unknown): Extraction {
     receiptDate,
     currency: clean(o.currency).toUpperCase(),
     remarks: clean(o.remarks),
+    otherReferences: (Array.isArray(o.otherReferences) ? o.otherReferences : [])
+      .map((r) => {
+        const ref = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+        return { label: clean(ref.label), value: clean(ref.value) };
+      })
+      .filter((r) => r.value)
+      .filter((r, i, all) => all.findIndex((x) => x.value === r.value) === i)
+      .slice(0, 12),
     items,
     uncertainFields: [...new Set(uncertainFields)],
     warnings: [...new Set(warnings)],

@@ -27,10 +27,18 @@ const ALLOWED_MIME = new Set([
 ]);
 const MAX_FILES = 5;
 const MAX_BASE64_CHARS = 18_000_000; // Gemini caps inline request payloads at ~20 MB
-const DEADLINE_MS = 110_000; // stay well under the Edge Function wall-clock limit
-const ATTEMPT_MS = 50_000; // a model slower than this is abandoned for the next one
-const THINKING_BUDGET = 1024; // cap "thinking" tokens: OCR needs little reasoning and it adds latency
-const DEFAULT_MODELS = "gemini-flash-latest,gemini-2.5-flash,gemini-flash-lite-latest";
+const DEADLINE_MS = 80_000; // overall budget, well under the Edge Function wall-clock limit
+const ATTEMPT_MS = 45_000; // one model call never runs longer than this
+const HEDGE_MS = 12_000; // if a model has not answered by then, start the next one in parallel
+const DEFAULT_MODELS = "gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash";
+
+// Reading a document needs little reasoning, and "thinking" is what makes Flash slow, so turn it
+// off. Models that reject one setting get the next one; the last option sends no setting at all.
+const THINKING_OPTIONS: (Record<string, unknown> | null)[] = [
+  { thinkingBudget: 0 },
+  { thinkingLevel: "low" },
+  null,
+];
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -41,13 +49,14 @@ class ModelError extends Error {
   }
 }
 
-async function callGemini(model: string, apiKey: string, parts: unknown[], timeoutMs: number, thinking = true) {
+async function callGemini(model: string, apiKey: string, parts: unknown[], signal: AbortSignal, thinkingIdx = 0) {
+  const thinkingConfig = THINKING_OPTIONS[thinkingIdx];
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
         contents: [{ role: "user", parts }],
@@ -55,8 +64,8 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], timeo
           temperature: 0,
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
-          maxOutputTokens: 16384,
-          ...(thinking ? { thinkingConfig: { thinkingBudget: THINKING_BUDGET } } : {}),
+          maxOutputTokens: 8192,
+          ...(thinkingConfig ? { thinkingConfig } : {}),
         },
       }),
     },
@@ -64,9 +73,8 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], timeo
 
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);
-    // Some models reject thinkingConfig; retry once without it.
-    if (res.status === 400 && thinking && /thinking/i.test(detail)) {
-      return callGemini(model, apiKey, parts, timeoutMs, false);
+    if (res.status === 400 && thinkingConfig && /thinking/i.test(detail)) {
+      return callGemini(model, apiKey, parts, signal, thinkingIdx + 1);
     }
     // 404: model renamed/retired, 429: free-tier quota, 5xx: overloaded -> try the next model
     const retryable = res.status === 404 || res.status === 429 || res.status >= 500;
@@ -83,6 +91,67 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], timeo
     const why = finishReason === "MAX_TOKENS" ? "response was cut off" : "malformed JSON";
     throw new ModelError(`${model}: ${why}`, true);
   }
+}
+
+type Extracted = Awaited<ReturnType<typeof callGemini>>;
+
+/**
+ * Tries the models in order, but does not wait for a slow one: after HEDGE_MS (or as soon as a
+ * call fails) the next model starts too. The first good answer wins and the other calls are aborted.
+ */
+function extractWithFallback(models: string[], apiKey: string, parts: unknown[]) {
+  return new Promise<{ data: Extracted; model: string }>((resolve, reject) => {
+    const deadline = Date.now() + DEADLINE_MS;
+    const winner = new AbortController();
+    const errors: string[] = [];
+    let next = 0, running = 0, settled = false;
+    let hedge: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (ok?: { data: Extracted; model: string }) => {
+      settled = true;
+      clearTimeout(hedge);
+      winner.abort();
+      ok ? resolve(ok) : reject(errors);
+    };
+
+    const launch = () => {
+      if (settled) return;
+      const remaining = deadline - Date.now();
+      if (next >= models.length || remaining < 5_000) {
+        if (running === 0) finish();
+        return;
+      }
+      const model = models[next++];
+      running++;
+      clearTimeout(hedge);
+      hedge = setTimeout(launch, HEDGE_MS);
+      const t0 = Date.now();
+      const signal = AbortSignal.any([winner.signal, AbortSignal.timeout(Math.min(remaining, ATTEMPT_MS))]);
+      callGemini(model, apiKey, parts, signal).then(
+        (data) => {
+          if (settled) return;
+          console.log(`gemini-extract: ${model} ok in ${Date.now() - t0} ms`);
+          finish({ data, model });
+        },
+        (err) => {
+          if (settled) return;
+          running--;
+          const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+          const msg = timedOut ? `${model}: timed out after ${Date.now() - t0} ms` : err instanceof Error ? err.message : String(err);
+          errors.push(msg);
+          console.error("gemini-extract:", msg);
+          if (err instanceof ModelError && !err.retryable) {
+            next = models.length; // e.g. a blocked request: other models will not do better
+            if (running === 0) finish();
+            return;
+          }
+          launch();
+        },
+      );
+    };
+
+    launch();
+  });
 }
 
 Deno.serve(async (req) => {
@@ -127,24 +196,11 @@ Deno.serve(async (req) => {
   ];
 
   const models = (Deno.env.get("GEMINI_MODELS") || DEFAULT_MODELS).split(",").map((m) => m.trim()).filter(Boolean);
-  const started = Date.now();
-  const errors: string[] = [];
-
-  for (const model of models) {
-    const remaining = DEADLINE_MS - (Date.now() - started);
-    if (remaining < 10_000) break;
-    const attemptStart = Date.now();
-    try {
-      const data = await callGemini(model, apiKey, parts, Math.min(remaining, ATTEMPT_MS));
-      console.log(`gemini-extract: ${model} ok in ${Date.now() - attemptStart} ms`);
-      return json(200, { data, model });
-    } catch (err) {
-      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-      const msg = timedOut ? `${model}: timed out after ${Date.now() - attemptStart} ms` : err instanceof Error ? err.message : String(err);
-      errors.push(msg);
-      console.error("gemini-extract:", msg);
-      if (err instanceof ModelError && !err.retryable) break;
-    }
+  let errors: string[] = [];
+  try {
+    return json(200, await extractWithFallback(models, apiKey, parts));
+  } catch (errs) {
+    errors = Array.isArray(errs) ? errs : [String(errs)];
   }
 
   const quota = errors.some((e) => e.includes("HTTP 429"));

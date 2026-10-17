@@ -777,7 +777,7 @@
             try { bmp = await createImageBitmap(file, { imageOrientation:'from-image' }); }
             catch { return { mimeType, data: await readAsBase64(file) }; }
             const long = Math.max(bmp.width, bmp.height);
-            const target = long > 2400 ? 2400 : long < 1600 ? Math.min(1600, long * 2) : long;
+            const target = long > 2000 ? 2000 : long < 1600 ? Math.min(1600, long * 2) : long;
             const scale = target / long;
             const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
             const canvas = document.createElement('canvas');
@@ -804,7 +804,7 @@
                 px[i] = px[i+1] = px[i+2] = v;
             }
             ctx.putImageData(img, 0, 0);
-            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.88));
             return { mimeType:'image/jpeg', data: await readAsBase64(blob) };
         }
 
@@ -817,13 +817,13 @@
             return prepareScanImage(file, mimeType);
         }
 
-        const SCAN_TIMEOUT_MS = 120000;
+        const SCAN_TIMEOUT_MS = 90000;
 
         async function extractReceiptFromFiles(files) {
             const prepared = [];
             for (const f of files) prepared.push(await prepareScanFile(f));
             const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(
-                'The AI service did not respond within 2 minutes.')), SCAN_TIMEOUT_MS));
+                'The AI service did not respond within 90 seconds.')), SCAN_TIMEOUT_MS));
             const { data, error } = await Promise.race([
                 db.functions.invoke('gemini-extract', { body: { files: prepared } }),
                 timeout
@@ -937,7 +937,8 @@
                     const data = await extractReceiptFromFiles(files);
                     if (id !== runId.current) return;
                     const summary = onExtracted(data);
-                    setResult({ ...summary, warnings: data.warnings || [], uncertain: data.uncertainFields || [] });
+                    setResult({ ...summary, warnings: data.warnings || [], uncertain: data.uncertainFields || [],
+                        refs: Array.isArray(data.otherReferences) ? data.otherReferences : [], noLpo: !data.lpoNumber });
                     setStatus('done');
                 } catch (err) {
                     if (id !== runId.current) return;
@@ -959,13 +960,17 @@
                     status==='working' && e('button', { className:'btn', onClick:cancel }, 'Cancel')
                 ),
                 status === 'working' && elapsed >= 20 && e('div', { style:{ marginTop:'8px', fontSize:'12px', color:'#666' } },
-                    'Large or multi-page scans can take up to a minute on the free tier…'),
+                    'Still working — multi-page or very large scans take longer…'),
                 status === 'error' && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FCEBE5', color:'#8A2E12', fontSize:'13px' } },
                     e('i',{className:'ti ti-alert-circle',style:{marginRight:'6px'}}), message, ' You can continue filling the form manually.'),
                 status === 'done' && result && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FAEEDA', color:'#633806', fontSize:'13px', lineHeight:1.5 } },
                     e('div', { style:{ fontWeight:600 } }, e('i',{className:'ti ti-alert-triangle',style:{marginRight:'6px'}}), 'AI-extracted — review every field below before confirming. Nothing has been saved yet.'),
                     e('div', null, 'Filled: ', result.filled.length ? result.filled.join(', ') : 'no header fields', ` · ${result.itemCount} item line(s).`),
                     result.uncertain.length > 0 && e('div', null, 'Low confidence: ', result.uncertain.join(', ')),
+                    result.noLpo && e('div', null, 'No LPO / PO number found on the document — please enter it manually.'),
+                    result.refs.length > 0 && e('div', null, 'Other references on the document: ',
+                        result.refs.map((r, i) => e('span', { key:i },
+                            i > 0 ? ' · ' : '', r.label ? r.label + ': ' : '', e('b', { style:{ userSelect:'all' } }, r.value)))),
                     result.warnings.length > 0 && e('ul', { style:{ margin:'4px 0 0 18px' } }, result.warnings.map((w,i)=>e('li',{key:i},w)))
                 )
             );
@@ -1230,8 +1235,7 @@
                                             unit: it.unit || 'Pcs',
                                             qty: parseFloat(it.qty),
                                             unit_price: parseFloat(it.unitPrice) || 0,
-                                            total_price: (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
-                                            created_by: session.user.id
+                                            total_price: (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0)
                                         }));
                                         const { data: itemsData, error: itemsError } = await db.from('grn_items').insert(itemsToInsert).select();
                                         if (itemsError) return alert('Error saving items: ' + itemsError.message);
