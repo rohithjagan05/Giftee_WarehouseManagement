@@ -830,8 +830,11 @@
             ]);
             if (error) {
                 let msg = error.message || 'Extraction failed';
-                try { const b = await error.context.json(); if (b && b.error) msg = b.error; } catch {}
-                throw new Error(msg);
+                let details = [];
+                try { const b = await error.context.json(); if (b && b.error) msg = b.error; if (b && Array.isArray(b.details)) details = b.details; } catch {}
+                const err = new Error(msg);
+                err.details = details;
+                throw err;
             }
             if (!data || !data.data || typeof data.data !== 'object') throw new Error('The AI service returned an unexpected response.');
             return data.data;
@@ -901,6 +904,7 @@
             const [files, setFiles] = useState([]);
             const [status, setStatus] = useState('idle');
             const [message, setMessage] = useState('');
+            const [details, setDetails] = useState([]);
             const [result, setResult] = useState(null);
             const [elapsed, setElapsed] = useState(0);
             const inputRef = useRef(null);
@@ -932,7 +936,7 @@
             const run = async () => {
                 if (!files.length) return;
                 const id = ++runId.current;
-                setStatus('working'); setMessage(''); setResult(null);
+                setStatus('working'); setMessage(''); setDetails([]); setResult(null);
                 try {
                     const data = await extractReceiptFromFiles(files);
                     if (id !== runId.current) return;
@@ -944,6 +948,7 @@
                     if (id !== runId.current) return;
                     setStatus('error');
                     setMessage((err && err.message) || 'Extraction failed. Please fill the form manually.');
+                    setDetails((err && err.details) || []);
                 }
             };
 
@@ -962,7 +967,10 @@
                 status === 'working' && elapsed >= 20 && e('div', { style:{ marginTop:'8px', fontSize:'12px', color:'#666' } },
                     'Still working — multi-page or very large scans take longer…'),
                 status === 'error' && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FCEBE5', color:'#8A2E12', fontSize:'13px' } },
-                    e('i',{className:'ti ti-alert-circle',style:{marginRight:'6px'}}), message, ' You can continue filling the form manually.'),
+                    e('i',{className:'ti ti-alert-circle',style:{marginRight:'6px'}}), message, ' You can continue filling the form manually.',
+                    details.length > 0 && e('details', { style:{ marginTop:'6px', fontSize:'11px', color:'#8A2E12' } },
+                        e('summary', { style:{ cursor:'pointer' } }, 'Technical details'),
+                        e('ul', { style:{ margin:'4px 0 0 18px', wordBreak:'break-word' } }, details.map((d,i)=>e('li',{key:i},d))))),
                 status === 'done' && result && e('div', { style:{ marginTop:'10px', padding:'10px 12px', borderRadius:'8px', background:'#FAEEDA', color:'#633806', fontSize:'13px', lineHeight:1.5 } },
                     e('div', { style:{ fontWeight:600 } }, e('i',{className:'ti ti-alert-triangle',style:{marginRight:'6px'}}), 'AI-extracted — review every field below before confirming. Nothing has been saved yet.'),
                     e('div', null, 'Filled: ', result.filled.length ? result.filled.join(', ') : 'no header fields', ` · ${result.itemCount} item line(s).`),
