@@ -1215,7 +1215,15 @@
                                             .filter(l => !cur || l.projectId === cur.id)
                                             .map(l => { const prj = projects.find(p=>p.id===l.projectId); return { id:l.id, title:l.number, sub:[l.supplier, prj?.number].filter(Boolean).join(' · '), search:l.number + ' ' + (l.supplier||'') }; });
                                     })() })),
-                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e('input',{ value:form.lSupplier, placeholder:'e.g. TechVision Global', onChange:x=>setForm({...form,lSupplier:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e(SuggestInput, { value:form.lSupplier, placeholder:'e.g. TechVision Global',
+                                    onChange:v=>setForm(prev=>({...prev,lSupplier:v})),
+                                    // Picking a known supplier also fills its address from the most recent LPO for that supplier
+                                    onPick:m=>setForm(prev=>({...prev,lSupplier:m.title,lAddress:m.address})),
+                                    suggestions: (() => {
+                                        const bySupplier = new Map();
+                                        lpos.forEach(l => { if (l.supplier) bySupplier.set(l.supplier, { id:l.supplier, title:l.supplier, sub:l.address||'', address:l.address||'', search:l.supplier + ' ' + (l.address||'') }); });
+                                        return [...bySupplier.values()];
+                                    })() })),
                                 e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Supplier Address'), e('input',{ value:form.lAddress, placeholder:'e.g. Silicon Oasis, Dubai', onChange:x=>setForm({...form,lAddress:x.target.value}) }))
                             )
                         ),
