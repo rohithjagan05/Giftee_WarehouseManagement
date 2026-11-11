@@ -1,0 +1,140 @@
+diff --git a/index.html b/index.html
+index 301bb61..358c7fb 100644
+--- a/index.html
++++ b/index.html
+@@ -324,6 +324,9 @@
+             const [gdns, setGdns] = useState([]);
+             const [gdnItems, setGdnItems] = useState([]);
+             const [loading, setLoading] = useState(false);
++            // Only the first load shows the full-screen loader. Later reloads run in the background,
++            // so a tab switch cannot unmount the page and wipe what the user is typing.
++            const firstLoad = useRef(true);
+             const [session, setSession] = useState(null);
+             const [authChecked, setAuthChecked] = useState(false);
+             const [loginEmail, setLoginEmail] = useState('');
+@@ -364,7 +367,7 @@
+             if (!session) return;
+ 
+             async function loadAll() {
+-                setLoading(true);
++                if (firstLoad.current) setLoading(true);
+ 
+                 const [p, l, g, gi, d, di] = await Promise.all([
+                     db.from('projects').select('*').order('created_at'),
+@@ -389,6 +392,7 @@
+                 setGdnItems((di.data || []).map(toCamel));
+ 
+                 setLoading(false);
++                firstLoad.current = false;
+ 
+                 // ADD AUTO-BACKUP CODE HERE
+                 const today = new Date();
+@@ -471,7 +475,7 @@
+ 
+             loadAll();
+ 
+-        }, [session]);
++        }, [session?.user?.id]);
+             const triggerEmailModal = (subject, body, fileName, attachmentType) => {
+                 setEmailModal({ isOpen:true, recipient:'', subject, body, fileName, attachmentType });
+             };
+@@ -985,6 +989,49 @@
+         }
+ 
+         // ─── GRN Page ───────────────────────────────────────────────────────────
++        // ─── Suggestion input: shows matching existing records while typing ─────
++        // suggestions: [{ id, title, sub, search }]. Matches containing the text are shown,
++        // with prefix matches first. Clicking one calls onPick(item).
++        function SuggestInput({ value, onChange, onPick, suggestions, placeholder }) {
++            const [open, setOpen] = useState(false);
++            const ref = useRef(null);
++
++            useEffect(() => {
++                const handleClickOutside = (ev) => { if (ref.current && !ref.current.contains(ev.target)) setOpen(false); };
++                document.addEventListener('mousedown', handleClickOutside);
++                return () => document.removeEventListener('mousedown', handleClickOutside);
++            }, []);
++
++            const q = String(value || '').trim().toLowerCase();
++            const matches = useMemo(() => {
++                if (!q) return [];
++                return suggestions
++                    .filter(s => s.search.toLowerCase().includes(q))
++                    .sort((a, b) => (b.search.toLowerCase().startsWith(q) ? 1 : 0) - (a.search.toLowerCase().startsWith(q) ? 1 : 0))
++                    .slice(0, 8);
++            }, [q, suggestions]);
++
++            return e('div', { ref, style: { position:'relative' } },
++                e('input', {
++                    value, placeholder, autoComplete:'off',
++                    onChange: x => { onChange(x.target.value); setOpen(true); },
++                    onFocus: () => setOpen(true)
++                }),
++                open && matches.length > 0 && e('div', {
++                    style: { position:'absolute', top:'100%', left:0, right:0, marginTop:4, background:'#fff', border:'1px solid rgba(0,0,0,0.15)', borderRadius:'8px', boxShadow:'0 4px 12px rgba(0,0,0,0.15)', zIndex:1000, padding:'4px', maxHeight:'240px', overflowY:'auto' }
++                }, matches.map(m => e('div', {
++                    key: m.id,
++                    onMouseDown: ev => { ev.preventDefault(); setOpen(false); onPick(m); },
++                    onMouseEnter: ev => { ev.currentTarget.style.background = '#f5f5f2'; },
++                    onMouseLeave: ev => { ev.currentTarget.style.background = 'transparent'; },
++                    style: { padding:'8px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'13px' }
++                },
++                    e('div', { style:{ fontWeight:600 } }, m.title),
++                    e('div', { style:{ fontSize:'11px', color:'#999' } }, m.sub)
++                )))
++            );
++        }
++
+         function GRNPage({ projects, setProjects, lpos, setLpos, grns, setGrns, grnItems, setGrnItems, triggerEmailModal, session }) {
+             const [view, setView] = useState('list');
+             const [selectedGrn, setSelectedGrn] = useState(null);
+@@ -1031,7 +1078,8 @@
+ 
+             const handleExtracted = (data) => {
+                 const res = applyExtractionToForm(form, data, projects, lpos);
+-                setForm(res.form);
++                // Apply to the latest form, so edits typed while the scan was running are kept.
++                setForm(prev => applyExtractionToForm(prev, data, projects, lpos).form);
+                 setAiFilled(true); setAiVerified(false);
+                 return res;
+             };
+@@ -1145,7 +1193,8 @@
+                         e('div', { className:'form-section' },
+                             e('div', { className:'form-section-title' }, e('i',{className:'ti ti-building'}), '1. Project Details'),
+                             e('div', { className:'form-grid' },
+-                                e('div',{className:'form-group'}, e('label',null,'Project Number'), e('input',{ value:form.pNumber, placeholder:'e.g. PRJ-AVI-01', onChange:x=>handleProjectNumberChange(x.target.value) })),
++                                e('div',{className:'form-group'}, e('label',null,'Project Number'), e(SuggestInput, { value:form.pNumber, placeholder:'e.g. PRJ-AVI-01', onChange:v=>handleProjectNumberChange(v), onPick:m=>handleProjectNumberChange(m.title),
++                                    suggestions: projects.map(p => ({ id:p.id, title:p.number, sub:[p.name, p.location].filter(Boolean).join(' · '), search:p.number + ' ' + p.name }) ) })),
+                                 e('div',{className:'form-group'}, e('label',null,'Project Name'), e('input',{ value:form.pName, placeholder:'e.g. Airport T3 Expansion', onChange:x=>setForm({...form,pName:x.target.value}) })),
+                                 e('div',{className:'form-group', style:{gridColumn:'span 2'}}, e('label',null,'Project Location'), e('input',{ value:form.pLocation, placeholder:'e.g. Dubai, UAE', onChange:x=>setForm({...form,pLocation:x.target.value}) }))
+                             )
+@@ -1153,7 +1202,13 @@
+                         e('div', { className:'form-section' },
+                             e('div', { className:'form-section-title' }, e('i',{className:'ti ti-file-invoice'}), '2. LPO Details'),
+                             e('div', { className:'form-grid' },
+-                                e('div',{className:'form-group'}, e('label',null,'LPO Number'), e('input',{ value:form.lNumber, placeholder:'e.g. LPO-CAM-700', onChange:x=>handleLpoNumberChange(x.target.value) })),
++                                e('div',{className:'form-group'}, e('label',null,'LPO Number'), e(SuggestInput, { value:form.lNumber, placeholder:'e.g. LPO-CAM-700', onChange:v=>handleLpoNumberChange(v), onPick:m=>handleLpoNumberChange(m.title),
++                                    suggestions: (() => {
++                                        const cur = projects.find(p=>p.number.toUpperCase()===form.pNumber.toUpperCase());
++                                        return lpos
++                                            .filter(l => !cur || l.projectId === cur.id)
++                                            .map(l => { const prj = projects.find(p=>p.id===l.projectId); return { id:l.id, title:l.number, sub:[l.supplier, prj?.number].filter(Boolean).join(' · '), search:l.number + ' ' + (l.supplier||'') }; });
++                                    })() })),
+                                 e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e('input',{ value:form.lSupplier, placeholder:'e.g. TechVision Global', onChange:x=>setForm({...form,lSupplier:x.target.value}) })),
+                                 e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Supplier Address'), e('input',{ value:form.lAddress, placeholder:'e.g. Silicon Oasis, Dubai', onChange:x=>setForm({...form,lAddress:x.target.value}) }))
+                             )
+diff --git a/supabase/functions/gemini-extract/index.ts b/supabase/functions/gemini-extract/index.ts
+index 4b294eb..980fe19 100644
+--- a/supabase/functions/gemini-extract/index.ts
++++ b/supabase/functions/gemini-extract/index.ts
+@@ -80,7 +80,9 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], signa
+ 
+   if (!res.ok) {
+     const detail = (await res.text()).slice(0, 300);
+-    if (res.status === 400 && thinkingConfig && /thinking/i.test(detail)) {
++    // Some models reject the thinking setting with a bare 400 (no "thinking" in the message),
++    // so retry with the next setting whenever one was sent. The last option sends none.
++    if (res.status === 400 && thinkingConfig) {
+       return callGemini(model, apiKey, parts, signal, thinkingIdx + 1);
+     }
+     const kind: FailureKind = res.status === 404 || res.status === 429 ? "skip"
