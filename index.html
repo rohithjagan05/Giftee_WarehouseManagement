@@ -1023,7 +1023,7 @@
 
             const q = String(value || '').trim().toLowerCase();
             const matches = useMemo(() => {
-                if (!q) return [];
+                if (!q) return suggestions.slice(0, 8);
                 return suggestions
                     .filter(s => s.search.toLowerCase().includes(q))
                     .sort((a, b) => (b.search.toLowerCase().startsWith(q) ? 1 : 0) - (a.search.toLowerCase().startsWith(q) ? 1 : 0))
@@ -1509,6 +1509,7 @@
             const [selProject, setSelProject] = useState('');
             const [addedBlocks, setAddedBlocks] = useState([]); // [{ lpoId, items }] committed to this GDN
             const [curLpo, setCurLpo] = useState(''); // LPO being worked on right now
+            const [productQuery, setProductQuery] = useState(''); // product code / OEM code search for the current LPO
             const [deliveries, setDeliveries] = useState({});
             const [form, setForm] = useState({ number:'', date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
 
@@ -1560,6 +1561,7 @@
                 setAddedBlocks(prev => [...prev, { lpoId: curLpo, items }]);
                 setCurLpo('');
                 setDeliveries({});
+                setProductQuery('');
             };
 
             const handleStartCreate = () => {
@@ -1679,21 +1681,27 @@
                             e('div',{className:'form-section-title'}, e('i',{className:'ti ti-file-invoice'}), `2. Pick an LPO and add its products${addedBlocks.length ? ` (${addedBlocks.length} LPO${addedBlocks.length>1?'s':''} in this note)` : ''}`),
                             e('div',{className:'form-group'},
                                 e('label',null,'LPO Number'),
-                                e(SearchableSelect,{ value:curLpo, placeholder:'Search LPO Number...', options:availLpos.map(l=>({value:l.id,label:`${l.number} - ${l.supplier||''}`})), onChange:val=>{setCurLpo(val);setDeliveries({});} })
+                                e(SearchableSelect,{ value:curLpo, placeholder:'Search LPO Number...', options:availLpos.map(l=>({value:l.id,label:`${l.number} - ${l.supplier||''}`})), onChange:val=>{setCurLpo(val);setDeliveries({});setProductQuery('');} })
                             ),
                             curLpo && (()=>{
                                 const lpo=lpos.find(l=>l.id===curLpo);
                                 const stockRows=calcStock(curLpo);
+                                const q=productQuery.trim().toLowerCase();
+                                const visibleRows=q ? stockRows.filter(st=>`${st.productCode} ${st.oemCode||''} ${st.description||''}`.toLowerCase().includes(q)) : stockRows;
                                 return e('div',{style:{marginTop:'12px'}},
+                                    e('div',{style:{marginBottom:'10px'}},
+                                        e(SuggestInput,{ value:productQuery, placeholder:'Search product code or OEM code...', onChange:v=>setProductQuery(v), onPick:m=>setProductQuery(m.productCode),
+                                            suggestions: stockRows.map(st=>({ id:st.productCode, title:st.productCode, sub:`OEM ${st.oemCode||'N/A'} · ${st.description||''} · ${st.available-addedQtyFor(curLpo, st.productCode)} available`, search:`${st.productCode} ${st.oemCode||''} ${st.description||''}`, productCode:st.productCode })) })
+                                    ),
                                     e('div',{style:{padding:'10px',background:'#FFFBF0',borderRadius:'8px',fontSize:'13px',color:'#633806',fontWeight:600,marginBottom:'10px'}}, `LPO ${lpo?.number||''} | Supplier: ${lpo?.supplier||'N/A'} | Address: ${lpo?.address||'N/A'}`),
                                     e('table',null,
                                         e('thead',null,e('tr',null,
                                             e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
                                             e('th',{style:{textAlign:'right'}},'Available Qty'), e('th',{style:{textAlign:'right'}},'Issue Qty')
                                         )),
-                                        e('tbody',null, stockRows.length===0
+                                        e('tbody',null, visibleRows.length===0
                                             ? e('tr',null,e('td',{colSpan:5,style:{textAlign:'center',color:'#999',padding:'24px'}},'No products received under this LPO.'))
-                                            : stockRows.map(st=>{
+                                            : visibleRows.map(st=>{
                                                 const k=`${curLpo}|${st.productCode}`;
                                                 const left=st.available-addedQtyFor(curLpo, st.productCode);
                                                 return e('tr',{key:k},
