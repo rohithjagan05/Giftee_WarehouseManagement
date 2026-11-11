@@ -998,6 +998,19 @@
         // ─── Suggestion input: shows matching existing records while typing ─────
         // suggestions: [{ id, title, sub, search }]. Matches containing the text are shown,
         // with prefix matches first. Clicking one calls onPick(item).
+        // Known products (from received items), one entry per product code, for product code / OEM code search
+        function buildProductCatalog(grnItems) {
+            const byCode = new Map();
+            (grnItems || []).forEach(i => { if (i.productCode) byCode.set(i.productCode, i); });
+            return [...byCode.values()].map(i => ({
+                id: i.productCode,
+                title: i.productCode,
+                sub: `OEM ${i.oemCode || 'N/A'} · ${i.description || ''} · ${i.unit || 'Pcs'}`,
+                search: `${i.productCode} ${i.oemCode || ''} ${i.description || ''}`,
+                productCode: i.productCode, oemCode: i.oemCode || '', description: i.description || '', unit: i.unit || 'Pcs'
+            }));
+        }
+
         function SuggestInput({ value, onChange, onPick, suggestions, placeholder }) {
             const [open, setOpen] = useState(false);
             const ref = useRef(null);
@@ -1246,8 +1259,8 @@
                                 e('tbody', null, form.items.map((it,idx)=>{
                                     const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
                                     return e('tr',{key:idx},
-                                        e('td',null,e('input',{placeholder:'Code',value:it.productCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].productCode=x.target.value;setForm({...form,items:n})}})),
-                                        e('td',null,e('input',{placeholder:'OEM Code',value:it.oemCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].oemCode=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e(SuggestInput,{placeholder:'Code',value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...form.items];n[idx].productCode=v;setForm({...form,items:n})},onPick:m=>{const n=[...form.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setForm({...form,items:n})}})),
+                                        e('td',null,e(SuggestInput,{placeholder:'OEM Code',value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...form.items];n[idx].oemCode=v;setForm({...form,items:n})},onPick:m=>{const n=[...form.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setForm({...form,items:n})}})),
                                         e('td',null,e('input',{placeholder:'Description',value:it.description,style:{width:140},onChange:x=>{const n=[...form.items];n[idx].description=x.target.value;setForm({...form,items:n})}})),
                                         e('td',null,e('input',{placeholder:'Pcs',value:it.unit,style:{width:50},onChange:x=>{const n=[...form.items];n[idx].unit=x.target.value;setForm({...form,items:n})}})),
                                         e('td',null,e('input',{type:'number',placeholder:'0',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...form.items];n[idx].qty=x.target.value;setForm({...form,items:n})}})),
@@ -1435,8 +1448,8 @@
                                 e('tbody', null, editForm.items.map((it,idx) => {
                                     const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
                                     return e('tr',{key:idx},
-                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
-                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].productCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].oemCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{type:'number',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qty=x.target.value;setEditForm({...editForm,items:n})}})),
@@ -1859,8 +1872,8 @@
                                 )),
                                 e('tbody', null, editForm.items.map((it,idx) =>
                                     e('tr',{key:idx},
-                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
-                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].productCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].oemCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{type:'number',value:it.qtyDelivered,style:{width:80,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qtyDelivered=x.target.value;setEditForm({...editForm,items:n})}})),
@@ -2094,7 +2107,7 @@
                             // OEM filter
                             reportType === 'oem' && e('div',{className:'form-group',key:'oem'},
                                 e('label',null,'OEM Code'),
-                                e('input',{ placeholder:'Type OEM Code...', value:oemInput, onChange:x=>setOemInput(x.target.value) })
+                                e(SuggestInput,{ placeholder:'Type OEM Code...', value:oemInput, onChange:v=>setOemInput(v), onPick:m=>setOemInput(m.oemCode), suggestions:buildProductCatalog(grnItems) })
                             )
                         ),
 
