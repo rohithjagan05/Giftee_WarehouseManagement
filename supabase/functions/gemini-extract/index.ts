@@ -80,7 +80,9 @@ async function callGemini(model: string, apiKey: string, parts: unknown[], signa
 
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);
-    if (res.status === 400 && thinkingConfig && /thinking/i.test(detail)) {
+    // Some models reject the thinking setting with a bare 400 (no "thinking" in the message),
+    // so retry with the next setting whenever one was sent. The last option sends none.
+    if (res.status === 400 && thinkingConfig) {
       return callGemini(model, apiKey, parts, signal, thinkingIdx + 1);
     }
     const kind: FailureKind = res.status === 404 || res.status === 429 ? "skip"
