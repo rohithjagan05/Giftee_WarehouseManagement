@@ -1494,7 +1494,8 @@
             const [editForm, setEditForm] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [selProject, setSelProject] = useState('');
-            const [selLpos, setSelLpos] = useState([]); // LPOs added to this GDN, in order
+            const [addedBlocks, setAddedBlocks] = useState([]); // [{ lpoId, items }] committed to this GDN
+            const [curLpo, setCurLpo] = useState(''); // LPO being worked on right now
             const [deliveries, setDeliveries] = useState({});
             const [form, setForm] = useState({ number:'', date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
 
@@ -1525,9 +1526,32 @@
 
             const availLpos = selProject ? lpos.filter(l=>l.projectId===selProject) : [];
 
+            // Quantity already committed to this GDN for one product of one LPO
+            const addedQtyFor = (lpoId, code) => addedBlocks
+                .filter(b => b.lpoId === lpoId)
+                .flatMap(b => b.items)
+                .filter(it => it.productCode === code)
+                .reduce((sum, it) => sum + it.qty, 0);
+
+            // "Add to note": move the current LPO's entered quantities into the note, then clear the picker
+            const addCurrentToNote = () => {
+                const stockRows = calcStock(curLpo);
+                const items = Object.entries(deliveries)
+                    .filter(([k, q]) => k.startsWith(curLpo + '|') && parseFloat(q) > 0)
+                    .map(([k, q]) => {
+                        const code = k.slice(curLpo.length + 1);
+                        const st = stockRows.find(x => x.productCode === code);
+                        return { productCode: code, oemCode: st?.oemCode || '', description: st?.description || '', unit: st?.unit || 'Pcs', qty: parseFloat(q) };
+                    });
+                if (items.length === 0) return alert('Enter a quantity for at least one product');
+                setAddedBlocks(prev => [...prev, { lpoId: curLpo, items }]);
+                setCurLpo('');
+                setDeliveries({});
+            };
+
             const handleStartCreate = () => {
                 setForm({ number:generateNextGDNNumber(gdns), date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
-                setSelProject(''); setSelLpos([]); setDeliveries({});
+                setSelProject(''); setCurLpo(''); setAddedBlocks([]); setDeliveries({});
                 setView('create');
             };
 
@@ -1631,38 +1655,24 @@
                                 e('div',{className:'form-group'}, e('label',null,'Date'), e('input',{type:'date',value:form.date,onChange:x=>setForm({...form,date:x.target.value})})),
                                 e('div',{className:'form-group'},
                                     e('label',null,'Project Number'),
-                                    e(SearchableSelect,{ value:selProject, placeholder:'Search Project Number...', options:projects.map(p=>({value:p.id,label:`${p.number} - ${p.name}`})), onChange:val=>{setSelProject(val);setSelLpos([]);setDeliveries({});} })
-                                ),
-                                e('div',{className:'form-group'},
-                                    e('label',null,'Add LPO Number'),
-                                    e(SearchableSelect,{ value:'', placeholder:selProject?'Search LPO to add...':'Choose Project First', disabled:!selProject, options:availLpos.filter(l=>!selLpos.includes(l.id)).map(l=>({value:l.id,label:l.number})), onChange:val=>{ if(val && !selLpos.includes(val)) setSelLpos([...selLpos,val]); } })
+                                    e(SearchableSelect,{ value:selProject, placeholder:'Search Project Number...', options:projects.map(p=>({value:p.id,label:`${p.number} - ${p.name}`})), onChange:val=>{setSelProject(val);setCurLpo('');setAddedBlocks([]);setDeliveries({});} })
                                 )
                             ),
                             selProject && e('div',{style:{marginTop:'12px',padding:'10px',background:'#F0F7FF',borderRadius:'8px',border:'0.5px solid rgba(24,95,165,0.15)',fontSize:'13px',color:'#0C447C',fontWeight:600}},
                                 (()=>{ const prj=projects.find(p=>p.id===selProject); return `Project Name: ${prj?prj.name:'N/A'} | Location: ${prj?prj.location:'N/A'}`; })()
-                            ),
-                            selLpos.map(id => {
-                                const lpo=lpos.find(l=>l.id===id);
-                                return e('div',{key:id,style:{marginTop:'8px',padding:'10px',background:'#FFFBF0',borderRadius:'8px',border:'0.5px solid rgba(99,56,6,0.15)',fontSize:'13px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px'}},
-                                    e('div',{style:{color:'#633806',fontWeight:600}},`LPO ${lpo?.number||''} | Supplier: ${lpo?.supplier||'N/A'} | Address: ${lpo?.address||'N/A'}`),
-                                    e('button',{className:'btn no-print',title:'Remove this LPO',onClick:()=>{ setSelLpos(selLpos.filter(x=>x!==id)); setDeliveries(Object.fromEntries(Object.entries(deliveries).filter(([k])=>!k.startsWith(id+'|')))); }}, e('i',{className:'ti ti-x'}))
-                                );
-                            })
-                        ),
-                        e('div',{className:'form-section'},
-                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'2. Consignee Details'),
-                            e('div',{className:'form-grid'},
-                                e('div',{className:'form-group'}, e('label',null,'Consignee Name'), e('input',{value:form.consigneeName,placeholder:'e.g. Ahmad Logistics / Site Manager',onChange:x=>setForm({...form,consigneeName:x.target.value})})),
-                                e('div',{className:'form-group'}, e('label',null,'Consignee Address'), e('input',{value:form.consigneeAddress,placeholder:'e.g. Gate 4, Terminal 3',onChange:x=>setForm({...form,consigneeAddress:x.target.value})}))
                             )
                         ),
-                        selLpos.length === 0
-                            ? (selProject && e('div',{className:'form-section',style:{color:'#999',fontSize:'13px'}},'Add one or more LPOs above to choose the products to dispatch from each.'))
-                            : selLpos.map(id => {
-                                const lpo=lpos.find(l=>l.id===id);
-                                const stockRows=calcStock(id);
-                                return e('div',{key:id,className:'form-section'},
-                                    e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}), `3. Available Stock Under LPO ${lpo?.number||''}`),
+                        selProject && e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-file-invoice'}), `2. Pick an LPO and add its products${addedBlocks.length ? ` (${addedBlocks.length} LPO${addedBlocks.length>1?'s':''} in this note)` : ''}`),
+                            e('div',{className:'form-group'},
+                                e('label',null,'LPO Number'),
+                                e(SearchableSelect,{ value:curLpo, placeholder:'Search LPO Number...', options:availLpos.map(l=>({value:l.id,label:`${l.number} - ${l.supplier||''}`})), onChange:val=>{setCurLpo(val);setDeliveries({});} })
+                            ),
+                            curLpo && (()=>{
+                                const lpo=lpos.find(l=>l.id===curLpo);
+                                const stockRows=calcStock(curLpo);
+                                return e('div',{style:{marginTop:'12px'}},
+                                    e('div',{style:{padding:'10px',background:'#FFFBF0',borderRadius:'8px',fontSize:'13px',color:'#633806',fontWeight:600,marginBottom:'10px'}}, `LPO ${lpo?.number||''} | Supplier: ${lpo?.supplier||'N/A'} | Address: ${lpo?.address||'N/A'}`),
                                     e('table',null,
                                         e('thead',null,e('tr',null,
                                             e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
@@ -1670,39 +1680,73 @@
                                         )),
                                         e('tbody',null, stockRows.length===0
                                             ? e('tr',null,e('td',{colSpan:5,style:{textAlign:'center',color:'#999',padding:'24px'}},'No products received under this LPO.'))
-                                            : stockRows.map(s=>{ const k=`${id}|${s.productCode}`; return e('tr',{key:k},
-                                                e('td',null,e('span',{className:'badge badge-blue'},s.productCode)),
-                                                e('td',null,s.oemCode||'N/A'),
-                                                e('td',null,s.description),
-                                                e('td',{className:'available-qty',style:{textAlign:'right'}},s.available+' '+(s.unit||'Pcs')),
-                                                e('td',null,e('input',{type:'number',placeholder:'0',value:deliveries[k]||'',style:{width:90,textAlign:'right',marginLeft:'auto',display:'block'},onChange:x=>{
-                                                    const val=parseFloat(x.target.value);
-                                                    if(val>s.available){alert(`Cannot exceed available stock of ${s.available}`);return;}
-                                                    setDeliveries({...deliveries,[k]:x.target.value});
-                                                }}))
-                                            ); })
+                                            : stockRows.map(st=>{
+                                                const k=`${curLpo}|${st.productCode}`;
+                                                const left=st.available-addedQtyFor(curLpo, st.productCode);
+                                                return e('tr',{key:k},
+                                                    e('td',null,e('span',{className:'badge badge-blue'},st.productCode)),
+                                                    e('td',null,st.oemCode||'N/A'),
+                                                    e('td',null,st.description),
+                                                    e('td',{className:'available-qty',style:{textAlign:'right'}},left+' '+(st.unit||'Pcs')),
+                                                    e('td',null,e('input',{type:'number',placeholder:'0',disabled:left<=0,value:deliveries[k]||'',style:{width:90,textAlign:'right',marginLeft:'auto',display:'block',background:left<=0?'#f5f5f2':'#fff'},onChange:x=>{
+                                                        const val=parseFloat(x.target.value);
+                                                        if(val>left){alert(`Cannot exceed available stock of ${left}`);return;}
+                                                        setDeliveries({...deliveries,[k]:x.target.value});
+                                                    }}))
+                                                );
+                                            })
                                         )
+                                    ),
+                                    e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'10px'}},
+                                        e('button',{className:'btn btn-primary',onClick:addCurrentToNote}, e('i',{className:'ti ti-plus'}), 'Add to note')
+                                    )
+                                );
+                            })()
+                        ),
+                        addedBlocks.length > 0 && e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}), '3. Items in this note'),
+                            addedBlocks.map((b,bi)=>{
+                                const lpo=lpos.find(l=>l.id===b.lpoId);
+                                return e('div',{key:bi,style:{marginBottom:'12px',border:'0.5px solid rgba(0,0,0,0.12)',borderRadius:'8px',padding:'10px'}},
+                                    e('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',fontSize:'13px',fontWeight:600}},
+                                        e('span',null,`LPO ${lpo?.number||''} · ${lpo?.supplier||''}`),
+                                        e('button',{className:'btn no-print',title:'Remove this LPO from the note',onClick:()=>setAddedBlocks(prev=>prev.filter((_,i)=>i!==bi))}, e('i',{className:'ti ti-trash'}))
+                                    ),
+                                    e('table',null,
+                                        e('thead',null,e('tr',null,
+                                            e('th',null,'Product Code'), e('th',null,'Description'), e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Qty Delivered')
+                                        )),
+                                        e('tbody',null, b.items.map((it,ii)=>e('tr',{key:ii},
+                                            e('td',null,e('span',{className:'badge badge-green'},it.productCode)),
+                                            e('td',null,it.description),
+                                            e('td',null,it.unit),
+                                            e('td',{style:{textAlign:'right',fontWeight:600}},it.qty)
+                                        )))
                                     )
                                 );
                             }),
+                            e('div',{style:{textAlign:'right',fontWeight:700,fontSize:'13px'}}, 'Total items: ', addedBlocks.reduce((sum,b)=>sum+b.items.reduce((s,it)=>s+it.qty,0),0))
+                        ),
+                        e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'4. Consignee Details'),
+                            e('div',{className:'form-grid'},
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Name'), e('input',{value:form.consigneeName,placeholder:'e.g. Ahmad Logistics / Site Manager',onChange:x=>setForm({...form,consigneeName:x.target.value})})),
+                                e('div',{className:'form-group'}, e('label',null,'Consignee Address'), e('input',{value:form.consigneeAddress,placeholder:'e.g. Gate 4, Terminal 3',onChange:x=>setForm({...form,consigneeAddress:x.target.value})}))
+                            )
+                        ),
                         e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
                             e('button',{className:'btn',onClick:()=>setView('list')},'Cancel'),
                             e('button',{className:'btn btn-primary',onClick: async () => {
-                                            if (!selLpos.length || !form.number || !form.consigneeName) return alert('Select a Project, add at least one LPO, and enter Consignee Name');
-                                            const itemsToDeliver = [];
-                                            selLpos.forEach(id => {
-                                                const stockRows = calcStock(id);
-                                                Object.entries(deliveries).forEach(([k, q]) => {
-                                                    if (!k.startsWith(id + '|') || !(parseFloat(q) > 0)) return;
-                                                    const code = k.slice(id.length + 1);
-                                                    const s = stockRows.find(x => x.productCode === code);
-                                                    itemsToDeliver.push({ product_code: code, oem_code: s?.oemCode || '', description: s?.description || '', unit: s?.unit || 'Pcs', qty_delivered: parseFloat(q), lpo_id: id });
-                                                });
-                                            });
-                                            if (itemsToDeliver.length === 0) return alert('Enter at least one quantity to dispatch');
+                                            if (curLpo && Object.entries(deliveries).some(([k,q]) => k.startsWith(curLpo + '|') && parseFloat(q) > 0)) return alert('Click "Add to note" for the LPO you entered before recording the GDN.');
+                                            if (addedBlocks.length === 0 || !form.number || !form.consigneeName) return alert('Add at least one LPO to the note, and enter Consignee Name');
+
+                                            const itemsToDeliver = addedBlocks.flatMap(b => b.items.map(it => ({
+                                                product_code: it.productCode, oem_code: it.oemCode, description: it.description,
+                                                unit: it.unit, qty_delivered: it.qty, lpo_id: b.lpoId
+                                            })));
 
                                             const { data: gdnData, error: gdnError } = await db.from('gdns')
-                                                .insert({ lpo_id: selLpos[0], number: form.number, date: form.date, consignee_name: form.consigneeName, consignee_address: form.consigneeAddress })
+                                                .insert({ lpo_id: addedBlocks[0].lpoId, number: form.number, date: form.date, consignee_name: form.consigneeName, consignee_address: form.consigneeAddress })
                                                 .select().single();
                                             if (gdnError) return alert('Error saving GDN: ' + gdnError.message);
                                             const newGdn = toCamel(gdnData);
