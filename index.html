@@ -280,6 +280,12 @@
             return 'GDN-NOV-502';
         };
 
+        function normalizeGdnItems(gdnRows, itemRows) {
+            const lpoByGdn = {};
+            (gdnRows || []).forEach(g => { lpoByGdn[g.id] = g.lpo_id; });
+            return (itemRows || []).map(r => ({ ...r, lpo_id: r.lpo_id || lpoByGdn[r.gdn_id] || null }));
+        }
+
         function buildBackupWorkbook(lpos, projects, calcStock, grns, grnItems, gdns, gdnItems) {
         const stockRows = [];
         lpos.forEach(l => {
@@ -389,7 +395,7 @@
                 setGrns((g.data || []).map(toCamel));
                 setGrnItems((gi.data || []).map(toCamel));
                 setGdns((d.data || []).map(toCamel));
-                setGdnItems((di.data || []).map(toCamel));
+                setGdnItems(normalizeGdnItems(d.data, di.data).map(toCamel));
 
                 setLoading(false);
                 firstLoad.current = false;
@@ -415,7 +421,7 @@
                         const grnsData = (g.data || []).map(toCamel);
                         const grnItemsData = (gi.data || []).map(toCamel);
                         const gdnsData = (d.data || []).map(toCamel);
-                        const gdnItemsData = (di.data || []).map(toCamel);
+                        const gdnItemsData = normalizeGdnItems(d.data, di.data).map(toCamel);
 
                         const tempCalcStock = (lpoId) => {
                             const lpoGrnIds = grnsData
@@ -443,7 +449,7 @@
                                 });
 
                             gdnItemsData
-                                .filter(i => lpoGdnIds.includes(i.gdnId))
+                                .filter(i => i.lpoId === lpoId)
                                 .forEach(i => {
                                     if (stock[i.productCode]) {
                                         stock[i.productCode].delivered += i.qtyDelivered;
@@ -488,7 +494,7 @@
                     if (!stock[i.productCode]) stock[i.productCode] = { ...i, received:0, delivered:0 };
                     stock[i.productCode].received += i.qty;
                 });
-                gdnItems.filter(i => lpoGdnIds.includes(i.gdnId)).forEach(i => {
+                gdnItems.filter(i => i.lpoId === lpoId).forEach(i => {
                     if (stock[i.productCode]) stock[i.productCode].delivered += i.qtyDelivered;
                 });
                 return Object.values(stock).map(s => ({ ...s, available: s.received - s.delivered }));
@@ -992,6 +998,19 @@
         // ─── Suggestion input: shows matching existing records while typing ─────
         // suggestions: [{ id, title, sub, search }]. Matches containing the text are shown,
         // with prefix matches first. Clicking one calls onPick(item).
+        // Known products (from received items), one entry per product code, for product code / OEM code search
+        function buildProductCatalog(grnItems) {
+            const byCode = new Map();
+            (grnItems || []).forEach(i => { if (i.productCode) byCode.set(i.productCode, i); });
+            return [...byCode.values()].map(i => ({
+                id: i.productCode,
+                title: i.productCode,
+                sub: `OEM ${i.oemCode || 'N/A'} · ${i.description || ''} · ${i.unit || 'Pcs'}`,
+                search: `${i.productCode} ${i.oemCode || ''} ${i.description || ''}`,
+                productCode: i.productCode, oemCode: i.oemCode || '', description: i.description || '', unit: i.unit || 'Pcs'
+            }));
+        }
+
         function SuggestInput({ value, onChange, onPick, suggestions, placeholder }) {
             const [open, setOpen] = useState(false);
             const ref = useRef(null);
@@ -1209,7 +1228,15 @@
                                             .filter(l => !cur || l.projectId === cur.id)
                                             .map(l => { const prj = projects.find(p=>p.id===l.projectId); return { id:l.id, title:l.number, sub:[l.supplier, prj?.number].filter(Boolean).join(' · '), search:l.number + ' ' + (l.supplier||'') }; });
                                     })() })),
-                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e('input',{ value:form.lSupplier, placeholder:'e.g. TechVision Global', onChange:x=>setForm({...form,lSupplier:x.target.value}) })),
+                                e('div',{className:'form-group'}, e('label',null,'Supplier Name'), e(SuggestInput, { value:form.lSupplier, placeholder:'e.g. TechVision Global',
+                                    onChange:v=>setForm(prev=>({...prev,lSupplier:v})),
+                                    // Picking a known supplier also fills its address from the most recent LPO for that supplier
+                                    onPick:m=>setForm(prev=>({...prev,lSupplier:m.title,lAddress:m.address})),
+                                    suggestions: (() => {
+                                        const bySupplier = new Map();
+                                        lpos.forEach(l => { if (l.supplier) bySupplier.set(l.supplier, { id:l.supplier, title:l.supplier, sub:l.address||'', address:l.address||'', search:l.supplier + ' ' + (l.address||'') }); });
+                                        return [...bySupplier.values()];
+                                    })() })),
                                 e('div',{className:'form-group',style:{gridColumn:'span 2'}}, e('label',null,'Supplier Address'), e('input',{ value:form.lAddress, placeholder:'e.g. Silicon Oasis, Dubai', onChange:x=>setForm({...form,lAddress:x.target.value}) }))
                             )
                         ),
@@ -1232,8 +1259,8 @@
                                 e('tbody', null, form.items.map((it,idx)=>{
                                     const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
                                     return e('tr',{key:idx},
-                                        e('td',null,e('input',{placeholder:'Code',value:it.productCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].productCode=x.target.value;setForm({...form,items:n})}})),
-                                        e('td',null,e('input',{placeholder:'OEM Code',value:it.oemCode,style:{width:90},onChange:x=>{const n=[...form.items];n[idx].oemCode=x.target.value;setForm({...form,items:n})}})),
+                                        e('td',null,e(SuggestInput,{placeholder:'Code',value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...form.items];n[idx].productCode=v;setForm({...form,items:n})},onPick:m=>{const n=[...form.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setForm({...form,items:n})}})),
+                                        e('td',null,e(SuggestInput,{placeholder:'OEM Code',value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...form.items];n[idx].oemCode=v;setForm({...form,items:n})},onPick:m=>{const n=[...form.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setForm({...form,items:n})}})),
                                         e('td',null,e('input',{placeholder:'Description',value:it.description,style:{width:140},onChange:x=>{const n=[...form.items];n[idx].description=x.target.value;setForm({...form,items:n})}})),
                                         e('td',null,e('input',{placeholder:'Pcs',value:it.unit,style:{width:50},onChange:x=>{const n=[...form.items];n[idx].unit=x.target.value;setForm({...form,items:n})}})),
                                         e('td',null,e('input',{type:'number',placeholder:'0',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...form.items];n[idx].qty=x.target.value;setForm({...form,items:n})}})),
@@ -1421,8 +1448,8 @@
                                 e('tbody', null, editForm.items.map((it,idx) => {
                                     const qty=parseFloat(it.qty)||0, price=parseFloat(it.unitPrice)||0;
                                     return e('tr',{key:idx},
-                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
-                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].productCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].oemCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{type:'number',value:it.qty,style:{width:60,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qty=x.target.value;setEditForm({...editForm,items:n})}})),
@@ -1480,15 +1507,20 @@
             const [editForm, setEditForm] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [selProject, setSelProject] = useState('');
-            const [selLpo, setSelLpo] = useState('');
+            const [addedBlocks, setAddedBlocks] = useState([]); // [{ lpoId, items }] committed to this GDN
+            const [curLpo, setCurLpo] = useState(''); // LPO being worked on right now
             const [deliveries, setDeliveries] = useState({});
             const [form, setForm] = useState({ number:'', date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
 
             const enrichedGdns = useMemo(() => gdns.map(d => {
-                const lpo = lpos.find(l=>l.id===d.lpoId);
-                const prj = projects.find(p=>p.id===lpo?.projectId);
-                return { ...d, lpo, prj };
-            }), [gdns, lpos, projects]);
+                const itemLpoIds = [...new Set(gdnItems.filter(i => i.gdnId === d.id).map(i => i.lpoId).filter(Boolean))];
+                const gdnLpos = itemLpoIds.length
+                    ? itemLpoIds.map(id => lpos.find(l => l.id === id)).filter(Boolean)
+                    : [lpos.find(l => l.id === d.lpoId)].filter(Boolean);
+                const lpo = gdnLpos[0];
+                const prj = projects.find(p => p.id === lpo?.projectId);
+                return { ...d, lpo, prj, lpoNumbers: gdnLpos.map(l => l.number).join(', ') };
+            }), [gdns, gdnItems, lpos, projects]);
 
             const filteredGdns = useMemo(() => {
                 if (!searchQuery.trim()) return enrichedGdns;
@@ -1507,27 +1539,32 @@
 
             const availLpos = selProject ? lpos.filter(l=>l.projectId===selProject) : [];
 
-            const getProjectStock = (projectId) => {
-                const projectLpos = lpos.filter(l=>l.projectId===projectId);
-                const projectLpoIds = projectLpos.map(l=>l.id);
-                const projectGrnIds = grns.filter(g=>projectLpoIds.includes(g.lpoId)).map(g=>g.id);
-                const projectGdnIds = gdns.filter(d=>projectLpoIds.includes(d.lpoId)).map(d=>d.id);
-                const pStock = {};
-                grnItems.filter(i=>projectGrnIds.includes(i.grnId)).forEach(i=>{
-                    if(!pStock[i.productCode]) pStock[i.productCode]={productCode:i.productCode,oemCode:i.oemCode,description:i.description,unit:i.unit,received:0,delivered:0};
-                    pStock[i.productCode].received+=i.qty;
-                });
-                gdnItems.filter(i=>projectGdnIds.includes(i.gdnId)).forEach(i=>{
-                    if(pStock[i.productCode]) pStock[i.productCode].delivered+=i.qtyDelivered;
-                });
-                return Object.values(pStock).map(s=>({...s,available:s.received-s.delivered}));
-            };
+            // Quantity already committed to this GDN for one product of one LPO
+            const addedQtyFor = (lpoId, code) => addedBlocks
+                .filter(b => b.lpoId === lpoId)
+                .flatMap(b => b.items)
+                .filter(it => it.productCode === code)
+                .reduce((sum, it) => sum + it.qty, 0);
 
-            const stock = selLpo ? calcStock(selLpo) : (selProject ? getProjectStock(selProject) : []);
+            // "Add to note": move the current LPO's entered quantities into the note, then clear the picker
+            const addCurrentToNote = () => {
+                const stockRows = calcStock(curLpo);
+                const items = Object.entries(deliveries)
+                    .filter(([k, q]) => k.startsWith(curLpo + '|') && parseFloat(q) > 0)
+                    .map(([k, q]) => {
+                        const code = k.slice(curLpo.length + 1);
+                        const st = stockRows.find(x => x.productCode === code);
+                        return { productCode: code, oemCode: st?.oemCode || '', description: st?.description || '', unit: st?.unit || 'Pcs', qty: parseFloat(q) };
+                    });
+                if (items.length === 0) return alert('Enter a quantity for at least one product');
+                setAddedBlocks(prev => [...prev, { lpoId: curLpo, items }]);
+                setCurLpo('');
+                setDeliveries({});
+            };
 
             const handleStartCreate = () => {
                 setForm({ number:generateNextGDNNumber(gdns), date:new Date().toISOString().split('T')[0], consigneeName:'', consigneeAddress:'' });
-                setSelProject(''); setSelLpo(''); setDeliveries({});
+                setSelProject(''); setCurLpo(''); setAddedBlocks([]); setDeliveries({});
                 setView('create');
             };
 
@@ -1553,7 +1590,7 @@
                 consigneeAddress: gdn.consigneeAddress || '',
                 prjId: prj?.id,
                 lpoId: lpo?.id,
-                lpoNumber: lpo?.number || '',
+                lpoNumber: [...new Set(items.map(i=>lpos.find(l=>l.id===i.lpoId)?.number).filter(Boolean))].join(', ') || lpo?.number || '',
                 prjNumber: prj?.number || '',
                 items: items.map(i => ({
                     id: i.id,
@@ -1561,7 +1598,8 @@
                     oemCode: i.oemCode || '',
                     description: i.description || '',
                     unit: i.unit || 'Pcs',
-                    qtyDelivered: String(i.qtyDelivered)
+                    qtyDelivered: String(i.qtyDelivered),
+                    lpoId: i.lpoId
                 }))
             });
             setView('edit');
@@ -1604,7 +1642,7 @@
                                         e('td', null, e('span',{className:'badge badge-green'},d.number)),
                                         e('td', null, d.date),
                                         e('td', null, d.prj?.number||'N/A'),
-                                        e('td', null, d.lpo?.number||'N/A'),
+                                        e('td', null, d.lpoNumbers||'N/A'),
                                         e('td', null, d.consigneeName),
                                         e('td', { style:{ textAlign:'right', paddingRight:'20px' } },
                                             e('div', { style:{ display:'flex', justifyContent:'flex-end', gap:'4px' } },
@@ -1630,74 +1668,98 @@
                                 e('div',{className:'form-group'}, e('label',null,'Date'), e('input',{type:'date',value:form.date,onChange:x=>setForm({...form,date:x.target.value})})),
                                 e('div',{className:'form-group'},
                                     e('label',null,'Project Number'),
-                                    e(SearchableSelect,{ value:selProject, placeholder:'Search Project Number...', options:projects.map(p=>({value:p.id,label:`${p.number} - ${p.name}`})), onChange:val=>{setSelProject(val);setSelLpo('');setDeliveries({});} })
-                                ),
-                                e('div',{className:'form-group'},
-                                    e('label',null,'LPO Number'),
-                                    e(SearchableSelect,{ value:selLpo, placeholder:selProject?'Search LPO Number...':'Choose Project First', disabled:!selProject, options:availLpos.map(l=>({value:l.id,label:l.number})), onChange:val=>{setSelLpo(val);setDeliveries({});} })
+                                    e(SearchableSelect,{ value:selProject, placeholder:'Search Project Number...', options:projects.map(p=>({value:p.id,label:`${p.number} - ${p.name}`})), onChange:val=>{setSelProject(val);setCurLpo('');setAddedBlocks([]);setDeliveries({});} })
                                 )
                             ),
-                            selProject && e('div',{style:{marginTop:'12px',padding:'10px',background:'#F0F7FF',borderRadius:'8px',border:'0.5px solid rgba(24,95,165,0.15)',fontSize:'13px',display:'flex',flexDirection:'column',gap:'4px'}},
-                                (()=>{
-                                    const prj=projects.find(p=>p.id===selProject);
-                                    const lpo=lpos.find(l=>l.id===selLpo);
-                                    return[
-                                        e('div',{key:'p',style:{color:'#0C447C',fontWeight:600}},`Project Name: ${prj?prj.name:'N/A'} | Location: ${prj?prj.location:'N/A'}`),
-                                        lpo && e('div',{key:'l',style:{color:'#633806',fontWeight:600,marginTop:'2px'}},`Supplier Name: ${lpo.supplier} | Supplier Address: ${lpo.address||'N/A'}`)
-                                    ];
-                                })()
+                            selProject && e('div',{style:{marginTop:'12px',padding:'10px',background:'#F0F7FF',borderRadius:'8px',border:'0.5px solid rgba(24,95,165,0.15)',fontSize:'13px',color:'#0C447C',fontWeight:600}},
+                                (()=>{ const prj=projects.find(p=>p.id===selProject); return `Project Name: ${prj?prj.name:'N/A'} | Location: ${prj?prj.location:'N/A'}`; })()
                             )
                         ),
+                        selProject && e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-file-invoice'}), `2. Pick an LPO and add its products${addedBlocks.length ? ` (${addedBlocks.length} LPO${addedBlocks.length>1?'s':''} in this note)` : ''}`),
+                            e('div',{className:'form-group'},
+                                e('label',null,'LPO Number'),
+                                e(SearchableSelect,{ value:curLpo, placeholder:'Search LPO Number...', options:availLpos.map(l=>({value:l.id,label:`${l.number} - ${l.supplier||''}`})), onChange:val=>{setCurLpo(val);setDeliveries({});} })
+                            ),
+                            curLpo && (()=>{
+                                const lpo=lpos.find(l=>l.id===curLpo);
+                                const stockRows=calcStock(curLpo);
+                                return e('div',{style:{marginTop:'12px'}},
+                                    e('div',{style:{padding:'10px',background:'#FFFBF0',borderRadius:'8px',fontSize:'13px',color:'#633806',fontWeight:600,marginBottom:'10px'}}, `LPO ${lpo?.number||''} | Supplier: ${lpo?.supplier||'N/A'} | Address: ${lpo?.address||'N/A'}`),
+                                    e('table',null,
+                                        e('thead',null,e('tr',null,
+                                            e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
+                                            e('th',{style:{textAlign:'right'}},'Available Qty'), e('th',{style:{textAlign:'right'}},'Issue Qty')
+                                        )),
+                                        e('tbody',null, stockRows.length===0
+                                            ? e('tr',null,e('td',{colSpan:5,style:{textAlign:'center',color:'#999',padding:'24px'}},'No products received under this LPO.'))
+                                            : stockRows.map(st=>{
+                                                const k=`${curLpo}|${st.productCode}`;
+                                                const left=st.available-addedQtyFor(curLpo, st.productCode);
+                                                return e('tr',{key:k},
+                                                    e('td',null,e('span',{className:'badge badge-blue'},st.productCode)),
+                                                    e('td',null,st.oemCode||'N/A'),
+                                                    e('td',null,st.description),
+                                                    e('td',{className:'available-qty',style:{textAlign:'right'}},left+' '+(st.unit||'Pcs')),
+                                                    e('td',null,e('input',{type:'number',placeholder:'0',disabled:left<=0,value:deliveries[k]||'',style:{width:90,textAlign:'right',marginLeft:'auto',display:'block',background:left<=0?'#f5f5f2':'#fff'},onChange:x=>{
+                                                        const val=parseFloat(x.target.value);
+                                                        if(val>left){alert(`Cannot exceed available stock of ${left}`);return;}
+                                                        setDeliveries({...deliveries,[k]:x.target.value});
+                                                    }}))
+                                                );
+                                            })
+                                        )
+                                    ),
+                                    e('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:'10px'}},
+                                        e('button',{className:'btn btn-primary',onClick:addCurrentToNote}, e('i',{className:'ti ti-plus'}), 'Add to note')
+                                    )
+                                );
+                            })()
+                        ),
+                        addedBlocks.length > 0 && e('div',{className:'form-section'},
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}), '3. Items in this note'),
+                            addedBlocks.map((b,bi)=>{
+                                const lpo=lpos.find(l=>l.id===b.lpoId);
+                                return e('div',{key:bi,style:{marginBottom:'12px',border:'0.5px solid rgba(0,0,0,0.12)',borderRadius:'8px',padding:'10px'}},
+                                    e('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',fontSize:'13px',fontWeight:600}},
+                                        e('span',null,`LPO ${lpo?.number||''} · ${lpo?.supplier||''}`),
+                                        e('button',{className:'btn no-print',title:'Remove this LPO from the note',onClick:()=>setAddedBlocks(prev=>prev.filter((_,i)=>i!==bi))}, e('i',{className:'ti ti-trash'}))
+                                    ),
+                                    e('table',null,
+                                        e('thead',null,e('tr',null,
+                                            e('th',null,'Product Code'), e('th',null,'Description'), e('th',null,'Unit'), e('th',{style:{textAlign:'right'}},'Qty Delivered')
+                                        )),
+                                        e('tbody',null, b.items.map((it,ii)=>e('tr',{key:ii},
+                                            e('td',null,e('span',{className:'badge badge-green'},it.productCode)),
+                                            e('td',null,it.description),
+                                            e('td',null,it.unit),
+                                            e('td',{style:{textAlign:'right',fontWeight:600}},it.qty)
+                                        )))
+                                    )
+                                );
+                            }),
+                            e('div',{style:{textAlign:'right',fontWeight:700,fontSize:'13px'}}, 'Total items: ', addedBlocks.reduce((sum,b)=>sum+b.items.reduce((s,it)=>s+it.qty,0),0))
+                        ),
                         e('div',{className:'form-section'},
-                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'2. Consignee Details'),
+                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-user'}),'4. Consignee Details'),
                             e('div',{className:'form-grid'},
                                 e('div',{className:'form-group'}, e('label',null,'Consignee Name'), e('input',{value:form.consigneeName,placeholder:'e.g. Ahmad Logistics / Site Manager',onChange:x=>setForm({...form,consigneeName:x.target.value})})),
                                 e('div',{className:'form-group'}, e('label',null,'Consignee Address'), e('input',{value:form.consigneeAddress,placeholder:'e.g. Gate 4, Terminal 3',onChange:x=>setForm({...form,consigneeAddress:x.target.value})}))
                             )
                         ),
-                        (selProject||selLpo) && e('div',{className:'form-section'},
-                            e('div',{className:'form-section-title'}, e('i',{className:'ti ti-list'}), selLpo?'3. Available Stock Under Selected LPO':'3. Available Stock Under Selected Project (Select LPO to Dispatch)'),
-                            e('table',null,
-                                e('thead',null,e('tr',null,
-                                    e('th',null,'Product Code'), e('th',null,'OEM Code'), e('th',null,'Description'),
-                                    e('th',{style:{textAlign:'right'}},'Available Qty'), e('th',{style:{textAlign:'right'}},'Issue Qty')
-                                )),
-                                e('tbody',null, stock.length===0
-                                    ? e('tr',null,e('td',{colSpan:5,style:{textAlign:'center',color:'#999',padding:'24px'}},'No products received yet for this scope.'))
-                                    : stock.map(s=>e('tr',{key:s.productCode},
-                                        e('td',null,e('span',{className:'badge badge-blue'},s.productCode)),
-                                        e('td',null,s.oemCode||'N/A'),
-                                        e('td',null,s.description),
-                                        e('td',{className:'available-qty',style:{textAlign:'right'}},s.available+' '+(s.unit||'Pcs')),
-                                        e('td',null,e('input',{type:'number',placeholder:selLpo?'0':'Select LPO',disabled:!selLpo,value:deliveries[s.productCode]||'',style:{width:90,textAlign:'right',marginLeft:'auto',display:'block',background:!selLpo?'#f5f5f2':'#fff'},onChange:x=>{
-                                            const val=parseFloat(x.target.value);
-                                            if(val>s.available){alert(`Cannot exceed available stock of ${s.available}`);return;}
-                                            setDeliveries({...deliveries,[s.productCode]:x.target.value});
-                                        }}))
-                                    ))
-                                )
-                            )
-                        ),
                         e('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}},
                             e('button',{className:'btn',onClick:()=>setView('list')},'Cancel'),
                             e('button',{className:'btn btn-primary',onClick: async () => {
-                                            if (!selLpo || !form.number || !form.consigneeName) return alert('Select Project/LPO and enter Consignee Name');
-                                            const itemsToDeliver = Object.entries(deliveries)
-                                                .filter(([, q]) => parseFloat(q) > 0)
-                                                .map(([code, q]) => {
-                                                    const stockItem = stock.find(s => s.productCode === code);
-                                                    return {
-                                                        product_code: code,
-                                                        oem_code: stockItem?.oemCode || '',
-                                                        description: stockItem?.description || '',
-                                                        unit: stockItem?.unit || 'Pcs',
-                                                        qty_delivered: parseFloat(q)
-                                                    };
-                                                });
-                                            if (itemsToDeliver.length === 0) return alert('Enter at least one quantity to dispatch');
+                                            if (curLpo && Object.entries(deliveries).some(([k,q]) => k.startsWith(curLpo + '|') && parseFloat(q) > 0)) return alert('Click "Add to note" for the LPO you entered before recording the GDN.');
+                                            if (addedBlocks.length === 0 || !form.number || !form.consigneeName) return alert('Add at least one LPO to the note, and enter Consignee Name');
+
+                                            const itemsToDeliver = addedBlocks.flatMap(b => b.items.map(it => ({
+                                                product_code: it.productCode, oem_code: it.oemCode, description: it.description,
+                                                unit: it.unit, qty_delivered: it.qty, lpo_id: b.lpoId
+                                            })));
 
                                             const { data: gdnData, error: gdnError } = await db.from('gdns')
-                                                .insert({ lpo_id: selLpo, number: form.number, date: form.date, consignee_name: form.consigneeName, consignee_address: form.consigneeAddress })
+                                                .insert({ lpo_id: addedBlocks[0].lpoId, number: form.number, date: form.date, consignee_name: form.consigneeName, consignee_address: form.consigneeAddress })
                                                 .select().single();
                                             if (gdnError) return alert('Error saving GDN: ' + gdnError.message);
                                             const newGdn = toCamel(gdnData);
@@ -1746,7 +1808,7 @@
                                 e('div',{style:{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px 8px',fontSize:'13px'}},
                                     ...[['Consignee Name:',selectedGdn.consigneeName||'N/A'],
                                         ['Consignee Address:',selectedGdn.consigneeAddress||'N/A'],
-                                        ['LPO Number:',lpos.find(l=>l.id===selectedGdn.lpoId)?.number||'N/A'],
+                                        ['LPO Number:',(()=>{ const ids=[...new Set(gdnItems.filter(i=>i.gdnId===selectedGdn.id).map(i=>i.lpoId).filter(Boolean))]; return ids.map(id=>lpos.find(l=>l.id===id)?.number).filter(Boolean).join(', ') || lpos.find(l=>l.id===selectedGdn.lpoId)?.number || 'N/A'; })()],
                                         ['Supplier Name:',lpos.find(l=>l.id===selectedGdn.lpoId)?.supplier||'N/A']
                                     ].flatMap(([label,val],i)=>[
                                         e('span',{key:'l'+i,style:{fontWeight:600,color:'#666'}},label),
@@ -1769,7 +1831,7 @@
                                             const det=getProductDetails(it.productCode);
                                             return e('tr',{key:it.id||idx},
                                                 e('td',null,idx+1),
-                                                e('td',null,e('span',{className:'badge badge-green'},it.productCode)),
+                                                e('td',null,e('span',{className:'badge badge-green'},it.productCode), e('div',{style:{fontSize:'11px',color:'#666',marginTop:'2px'}}, lpos.find(l=>l.id===it.lpoId)?.number||'')),
                                                 e('td',null,det.oemCode), e('td',null,det.description), e('td',null,det.unit),
                                                 e('td',{style:{textAlign:'right',fontWeight:600}},it.qtyDelivered)
                                             );
@@ -1810,8 +1872,8 @@
                                 )),
                                 e('tbody', null, editForm.items.map((it,idx) =>
                                     e('tr',{key:idx},
-                                        e('td',null,e('input',{value:it.productCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].productCode=x.target.value;setEditForm({...editForm,items:n})}})),
-                                        e('td',null,e('input',{value:it.oemCode,style:{width:90},onChange:x=>{const n=[...editForm.items];n[idx].oemCode=x.target.value;setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.productCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].productCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
+                                        e('td',null,e(SuggestInput,{value:it.oemCode,suggestions:buildProductCatalog(grnItems),onChange:v=>{const n=[...editForm.items];n[idx].oemCode=v;setEditForm({...editForm,items:n})},onPick:m=>{const n=[...editForm.items];n[idx]={...n[idx],productCode:m.productCode,oemCode:m.oemCode,description:m.description,unit:m.unit};setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.description,style:{width:140},onChange:x=>{const n=[...editForm.items];n[idx].description=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{value:it.unit,style:{width:50},onChange:x=>{const n=[...editForm.items];n[idx].unit=x.target.value;setEditForm({...editForm,items:n})}})),
                                         e('td',null,e('input',{type:'number',value:it.qtyDelivered,style:{width:80,textAlign:'right'},onChange:x=>{const n=[...editForm.items];n[idx].qtyDelivered=x.target.value;setEditForm({...editForm,items:n})}})),
@@ -1830,6 +1892,7 @@
                                 const validItems = editForm.items.filter(it=>it.productCode&&it.qtyDelivered);
                                 const itemsToInsert = validItems.map(it=>({
                                     gdn_id: editForm.gdnId,
+                                    lpo_id: it.lpoId || editForm.lpoId,
                                     product_code: it.productCode,
                                     oem_code: it.oemCode,
                                     description: it.description,
@@ -1953,7 +2016,7 @@
                         const prj=projects.find(p=>p.id===lpo?.projectId);
                         return gdnItems.filter(i=>i.gdnId===gdn.id).map(i=>{
                             const det=getProductDetails(i.productCode);
-                            return {'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','GDN Number':gdn.number,'Date':gdn.date,'Product Code':i.productCode,'OEM Code':det.oemCode,'Description':det.description,'Unit':det.unit,'Delivered Quantity':i.qtyDelivered};
+                            return {'Project Name':prj?.name||'N/A','Project Number':prj?.number||'N/A','LPO Number':(lpos.find(l=>l.id===i.lpoId)||lpo)?.number||'N/A','GDN Number':gdn.number,'Date':gdn.date,'Product Code':i.productCode,'OEM Code':det.oemCode,'Description':det.description,'Unit':det.unit,'Delivered Quantity':i.qtyDelivered};
                         });
                     }
                     case 'oem':{
@@ -2044,7 +2107,7 @@
                             // OEM filter
                             reportType === 'oem' && e('div',{className:'form-group',key:'oem'},
                                 e('label',null,'OEM Code'),
-                                e('input',{ placeholder:'Type OEM Code...', value:oemInput, onChange:x=>setOemInput(x.target.value) })
+                                e(SuggestInput,{ placeholder:'Type OEM Code...', value:oemInput, onChange:v=>setOemInput(v), onPick:m=>setOemInput(m.oemCode), suggestions:buildProductCatalog(grnItems) })
                             )
                         ),
 
